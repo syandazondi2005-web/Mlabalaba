@@ -40,7 +40,7 @@ const MILLS = [
   [0,8,16],[2,10,18],[4,12,20],[6,14,22],
 ];
 
-const ADJACENCY = Array.from({ length: 24 }, () => new Set());
+const ADJACENCY = Array.from({ length: 24 }, () => new Set<number>());
 ALL_EDGES.forEach(([a, b]) => { ADJACENCY[a].add(b); ADJACENCY[b].add(a); });
 
 const PIECES_PER_PLAYER = 12;
@@ -403,7 +403,10 @@ function useBeeper(enabled) {
   const play = useCallback((freqs = [440], dur = 0.09, type = "sine") => {
     if (!enabled) return;
     try {
-      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      if (!ctxRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        ctxRef.current = new AudioCtx();
+      }
       const ctx = ctxRef.current;
       freqs.forEach((f, idx) => {
         const osc = ctx.createOscillator();
