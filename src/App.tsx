@@ -1284,6 +1284,17 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
     statsSaved.current = false;
   };
 
+  const [confirmingRestart, setConfirmingRestart] = useState(false);
+  const handleRestartOnline = () => {
+    const fresh = createInitialState();
+    setState(fresh);
+    setHistory([]);
+    setSeconds(0);
+    statsSaved.current = false;
+    setConfirmingRestart(false);
+    // the state-change effect above will push `fresh` to the room automatically
+  };
+
   if (isOnline && !opponentJoined) {
     return (
       <div className="mlb-fade-in w-full max-w-lg mx-auto flex flex-col items-center gap-5 text-center py-10">
@@ -1315,11 +1326,37 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
           {isOnline && <span className="flex items-center gap-1"><Wifi size={13} style={{ color: "var(--mlb-teal)" }} /> Room {roomCode}</span>}
           <span className="flex items-center gap-1"><Clock size={14} /> {Math.floor(seconds / 60)}:{(seconds % 60).toString().padStart(2, "0")}</span>
         </div>
-        <button onClick={handleUndo} disabled={history.length === 0 || isOnline} className="mlb-focus flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-30"
-          style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
-          <RotateCcw size={13} /> Undo
-        </button>
+        {isOnline ? (
+          <button onClick={() => setConfirmingRestart(true)} className="mlb-focus flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
+            style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
+            <RotateCcw size={13} /> Restart game
+          </button>
+        ) : (
+          <button onClick={handleUndo} disabled={history.length === 0} className="mlb-focus flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-30"
+            style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
+            <RotateCcw size={13} /> Undo
+          </button>
+        )}
       </div>
+
+      {confirmingRestart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#000000aa" }}>
+          <div className="mlb-pop rounded-2xl p-6 w-full max-w-sm text-center" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+            <h3 className="mlb-display text-xl mb-2" style={{ color: "var(--mlb-text)" }}>Restart this game?</h3>
+            <p className="text-sm mb-5" style={{ color: "var(--mlb-textDim)" }}>
+              This clears the board for both players and starts a fresh match in this same room. It can't be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmingRestart(false)} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
+                Cancel
+              </button>
+              <button onClick={handleRestartOnline} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
+                Restart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <StatusBanner state={state} names={names} />
 
