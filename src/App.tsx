@@ -272,6 +272,18 @@ function applyAction(state, action) {
   return state;
 }
 
+function countPotentialMills(state, player) {
+  // lines with exactly 2 of this player's pieces and 1 empty point — a threat one move from completing
+  let count = 0;
+  for (const line of MILLS) {
+    const vals = line.map((i) => state.points[i]);
+    const mine = vals.filter((v) => v === player).length;
+    const empty = vals.filter((v) => v === null).length;
+    if (mine === 2 && empty === 1) count += 1;
+  }
+  return count;
+}
+
 function evaluate(state, player) {
   if (state.gameOver) {
     if (state.gameOver.winner === player) return 100000;
@@ -284,10 +296,13 @@ function evaluate(state, player) {
   const oppMills = millPointsFor(state.points, opp).size / 3;
   const myMobility = state.phase === "movement" ? getMovablePieces(state, player).length : 0;
   const oppMobility = state.phase === "movement" ? getMovablePieces(state, opp).length : 0;
+  const myThreats = countPotentialMills(state, player);
+  const oppThreats = countPotentialMills(state, opp);
   return (
     (myCount - oppCount) * 10 +
     (myMills - oppMills) * 8 +
     (myMobility - oppMobility) * 2 +
+    (myThreats - oppThreats) * 4 +
     (state.capturedCount[opp] - state.capturedCount[player]) * 5
   );
 }
@@ -354,7 +369,7 @@ function chooseAiAction(state, player, difficulty) {
     return actions[Math.floor(Math.random() * actions.length)];
   }
 
-  const depth = { intermediate: 1, advanced: 2, expert: 3 }[difficulty] || 1;
+  const depth = { intermediate: 1, advanced: 2, expert: 4 }[difficulty] || 1;
   const epsilon = { intermediate: 0.15, advanced: 0.03, expert: 0 }[difficulty] ?? 0.1;
 
   if (Math.random() < epsilon) return actions[Math.floor(Math.random() * actions.length)];
@@ -479,6 +494,66 @@ function GlobalStyle() {
   );
 }
 
+/* Isihlangu (war shield) crossed with an iklwa (stabbing spear) — the game's mark */
+function ShieldMark({ palette, size = 40 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <ellipse cx="20" cy="21" rx="11" ry="16" fill={palette.copper} stroke={palette.gold} strokeWidth="1.6" />
+      <line x1="20" y1="6" x2="20" y2="36" stroke={palette.gold} strokeWidth="1.4" opacity="0.85" />
+      <line x1="12" y1="14" x2="28" y2="14" stroke={palette.bg} strokeWidth="1" opacity="0.35" />
+      <line x1="10" y1="21" x2="30" y2="21" stroke={palette.bg} strokeWidth="1" opacity="0.35" />
+      <line x1="12" y1="28" x2="28" y2="28" stroke={palette.bg} strokeWidth="1" opacity="0.35" />
+      <g transform="rotate(28 20 20)">
+        <line x1="20" y1="1" x2="20" y2="34" stroke={palette.teal} strokeWidth="2" strokeLinecap="round" />
+        <path d="M 20 1 L 16 9 L 24 9 Z" fill={palette.teal} />
+      </g>
+    </svg>
+  );
+}
+
+/* Shared pattern defs: a subtle leopard-rosette texture and a beadwork diamond strip */
+function PatternDefs({ palette }) {
+  const spot = "#2A160C";
+  const rosette = (cx, cy, r, key) => (
+    <g key={key} opacity="0.55">
+      <ellipse cx={cx - r * 0.6} cy={cy - r * 0.3} rx={r * 0.5} ry={r * 0.35} fill={spot} />
+      <ellipse cx={cx + r * 0.6} cy={cy - r * 0.2} rx={r * 0.45} ry={r * 0.3} fill={spot} />
+      <ellipse cx={cx} cy={cy + r * 0.55} rx={r * 0.55} ry={r * 0.35} fill={spot} />
+    </g>
+  );
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <defs>
+        <pattern id="mlbLeopard" width="52" height="52" patternUnits="userSpaceOnUse" patternTransform="rotate(8)">
+          <rect width="52" height="52" fill={palette.copper} opacity="0.16" />
+          {rosette(14, 14, 9, "a")}
+          {rosette(40, 30, 8, "b")}
+          {rosette(22, 42, 7, "c")}
+        </pattern>
+        <pattern id="mlbBeads" width="16" height="16" patternUnits="userSpaceOnUse">
+          <polygon points="8,1 15,8 8,15 1,8" fill="none" stroke={palette.gold} strokeWidth="1.4" opacity="0.6" />
+        </pattern>
+      </defs>
+    </svg>
+  );
+}
+
+function BeadDivider({ height = 7 }) {
+  return (
+    <svg width="100%" height={height} style={{ display: "block" }}>
+      <rect width="100%" height="100%" fill="url(#mlbBeads)" />
+    </svg>
+  );
+}
+
+function LeopardSwatch({ size = 12 }) {
+  return (
+    <svg width={size} height={size} style={{ borderRadius: 3, flexShrink: 0 }} aria-hidden="true">
+      <rect width={size} height={size} rx="3" fill="url(#mlbLeopard)" />
+    </svg>
+  );
+}
+
 function IconBtn({ icon: Icon, label, onClick, active = false, className = "" }) {
   return (
     <button
@@ -515,8 +590,71 @@ function Avatar({ name, tone, size = 44 }) {
    BOARD
    ========================================================================= */
 
+const PIECE_STYLES = [
+  { id: "classic", label: "Classic" },
+  { id: "ukhamba", label: "Ukhamba" },
+  { id: "beads", label: "Ucu Beads" },
+  { id: "leopard", label: "Leopard" },
+];
+
+function pieceFill(style, defaultFill) {
+  if (style === "leopard") return "url(#mlbLeopard)";
+  return defaultFill;
+}
+
+function PieceTexture({ style, cx, cy, r }) {
+  if (style === "ukhamba") {
+    return (
+      <>
+        <circle cx={cx} cy={cy} r={r * 0.72} fill="none" stroke="#00000035" strokeWidth="1.1" />
+        <circle cx={cx} cy={cy} r={r * 0.44} fill="none" stroke="#00000035" strokeWidth="1.1" />
+      </>
+    );
+  }
+  if (style === "beads") {
+    const colors = ["#D9A64C", "#C6672E", "#2F7566", "#F3ECDD"];
+    return Array.from({ length: 8 }).map((_, i) => {
+      const angle = (i / 8) * Math.PI * 2;
+      const bx = cx + Math.cos(angle) * r * 0.62;
+      const by = cy + Math.sin(angle) * r * 0.62;
+      return <circle key={i} cx={bx} cy={by} r={r * 0.14} fill={colors[i % colors.length]} stroke="#00000030" strokeWidth="0.6" />;
+    });
+  }
+  return null;
+}
+
+function PieceStylePicker({ value, onChange, palette }) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {PIECE_STYLES.map((s) => (
+        <button
+          key={s.id}
+          onClick={() => onChange(s.id)}
+          className="mlb-focus flex flex-col items-center gap-1.5 rounded-lg py-2 transition-all"
+          style={{
+            background: value === s.id ? `${palette.gold}22` : "var(--mlb-surface2)",
+            border: `1.5px solid ${value === s.id ? palette.gold : "var(--mlb-border)"}`,
+          }}
+        >
+          <svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
+            <defs>
+              <radialGradient id={`pick-${s.id}`} cx="35%" cy="30%" r="70%">
+                <stop offset="0%" stopColor="#F0A46E" />
+                <stop offset="100%" stopColor={palette.copper} />
+              </radialGradient>
+            </defs>
+            <circle cx="20" cy="20" r="16" fill={pieceFill(s.id, `url(#pick-${s.id})`)} stroke="#00000033" strokeWidth="1.2" />
+            <PieceTexture style={s.id} cx={20} cy={20} r={16} />
+          </svg>
+          <span className="text-[10px] font-bold" style={{ color: "var(--mlb-text)" }}>{s.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Board({
-  state, onPointClick, interactive, palette, size = 560, showLegalHints = true,
+  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic",
 }) {
   const legalTargets = useMemo(() => {
     if (!interactive) return [];
@@ -553,6 +691,7 @@ function Board({
 
       <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity="0.15" />
       <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />
+      <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />
 
       {ALL_EDGES.map(([a, b], idx) => (
         <line
@@ -601,10 +740,11 @@ function Board({
                 <circle cx={pt.x} cy={pt.y} r="19" fill="#00000055" transform="translate(0,2)" />
                 <circle
                   cx={pt.x} cy={pt.y} r="18"
-                  fill={occ === "P1" ? "url(#p1grad)" : "url(#p2grad)"}
+                  fill={occ === "P1" ? pieceFill(pieceStyle, "url(#p1grad)") : "url(#p2grad)"}
                   stroke={isSelected ? palette.gold : "#00000033"}
                   strokeWidth={isSelected ? 4 : 1.5}
                 />
+                {occ === "P1" && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={18} />}
                 {isSelectable && (
                   <circle cx={pt.x} cy={pt.y} r="24" fill="none" stroke={palette.gold} strokeWidth="2.5" className="mlb-ring" />
                 )}
@@ -760,6 +900,9 @@ function ResultsModal({ state, names, onRematch, onLobby, matchSeconds }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#000000aa" }}>
       <div className="relative mlb-pop rounded-3xl p-6 sm:p-8 w-full max-w-md overflow-hidden" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+        <svg className="absolute inset-x-0 top-0" width="100%" height="10" style={{ display: "block" }} aria-hidden="true">
+          <rect width="100%" height="100%" fill="url(#mlbLeopard)" />
+        </svg>
         <Confetti />
         <div className="relative text-center">
           <Crown className="mx-auto mb-2" size={40} style={{ color: "var(--mlb-gold)" }} />
@@ -1086,12 +1229,14 @@ function ModeCard({ icon: Icon, title, desc, onClick, accent }) {
 
 function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline }) {
   const [difficulty, setDifficulty] = useState("intermediate");
+  const [pieceStyle, setPieceStyle] = useState("classic");
+  const canPickPiece = difficulty === "advanced" || difficulty === "expert";
   const winPct = stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
   return (
     <div className="mlb-fade-in max-w-5xl mx-auto w-full flex flex-col gap-8">
       <div className="text-center flex flex-col items-center gap-2 pt-4">
         <div className="flex items-center gap-3">
-          <svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke={palette.gold} strokeWidth="3" /><circle cx="20" cy="20" r="10" fill={palette.copper} /><circle cx="20" cy="20" r="4" fill={palette.teal} /></svg>
+          <ShieldMark palette={palette} size={40} />
           <h1 className="mlb-display text-5xl tracking-wide" style={{ color: "var(--mlb-text)" }}>MLABALABA</h1>
         </div>
         <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>A modern take on the classic Southern African mill game</p>
@@ -1116,20 +1261,34 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline }) {
             <div className="grid grid-cols-2 gap-2 mt-1">
               {["beginner", "intermediate", "advanced", "expert"].map((d) => (
                 <button key={d} onClick={() => setDifficulty(d)}
-                  className="mlb-focus text-xs font-bold rounded-lg py-2 capitalize transition-all"
+                  className="mlb-focus text-xs font-bold rounded-lg py-2 capitalize transition-all flex items-center justify-center gap-1.5"
                   style={{
                     background: difficulty === d ? palette.gold : "var(--mlb-surface2)",
                     color: difficulty === d ? "#181310" : "var(--mlb-text)",
                     border: "1px solid var(--mlb-border)",
                   }}>
+                  {d === "expert" && <LeopardSwatch size={11} />}
                   {d}
                 </button>
               ))}
             </div>
-            <button onClick={() => onStart("ai", difficulty)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
-              <Play size={16} /> Start vs {difficulty}
-            </button>
+            {!canPickPiece && (
+              <button onClick={() => onStart("ai", difficulty)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
+                <Play size={16} /> Start vs {difficulty}
+              </button>
+            )}
           </div>
+
+          {canPickPiece && (
+            <div className="rounded-2xl p-5 flex flex-col gap-3 sm:col-span-2" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+              <p className="font-bold" style={{ color: "var(--mlb-text)" }}>Choose your piece</p>
+              <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Unlocked on Advanced and Expert — pick the style your pieces play with.</p>
+              <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} />
+              <button onClick={() => onStart("ai", difficulty, pieceStyle)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
+                <Play size={16} /> Start vs {difficulty} with {PIECE_STYLES.find((p) => p.id === pieceStyle).label}
+              </button>
+            </div>
+          )}
 
           <ModeCard icon={Users} title="Local 2-player" desc="Pass and play on one device with a friend, full rules enforced." accent={palette.teal} onClick={() => onStart("local")} />
           <ModeCard icon={Target} title="Practice mode" desc="Free-form board with no AI opponent — explore placements and mills at your own pace." accent={palette.copper} onClick={() => onStart("practice")} />
@@ -1151,7 +1310,7 @@ function Divider() { return <span className="h-4 w-px" style={{ background: "var
    GAME VIEW
    ========================================================================= */
 
-function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn, roomCode, onlineRole }) {
+function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn, roomCode, onlineRole, pieceStyle = "classic" }) {
   const [state, setState] = useState(createInitialState);
   const [history, setHistory] = useState([]);
   const [seconds, setSeconds] = useState(0);
@@ -1363,7 +1522,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
       <div className="grid lg:grid-cols-[220px_1fr_220px] gap-4 items-start">
         <div className="order-2 lg:order-1"><PlayerCard side="P1" name={names.P1} avatarTone={palette.copper} isTurn={state.currentPlayer === "P1" && !state.gameOver} state={state} profile={p1Profile} /></div>
         <div className="order-1 lg:order-2 flex justify-center rounded-2xl p-3 sm:p-6" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} />
+          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} />
         </div>
         <div className="order-3 flex flex-col gap-4">
           <PlayerCard side="P2" name={names.P2} avatarTone={palette.teal} isTurn={state.currentPlayer === "P2" && !state.gameOver} state={state} profile={p2Profile} mirrored />
@@ -1390,6 +1549,7 @@ export default function App() {
   const [stats, setStats] = useState(defaultStats());
   const [roomCode, setRoomCode] = useState(null);
   const [onlineRole, setOnlineRole] = useState(null);
+  const [pieceStyle, setPieceStyle] = useState("classic");
   const gameKey = useRef(0);
 
   useEffect(() => { loadStats().then(setStats); }, []);
@@ -1402,10 +1562,11 @@ export default function App() {
     "--mlb-wood": palette.wood, "--mlb-woodLight": palette.woodLight,
   };
 
-  const startGame = (m, d) => {
+  const startGame = (m, d, ps) => {
     gameKey.current += 1;
     setMode(m);
     if (d) setDifficulty(d);
+    setPieceStyle(ps || "classic");
     setView("game");
   };
 
@@ -1420,9 +1581,10 @@ export default function App() {
   return (
     <div className="mlb-root min-h-screen w-full flex flex-col" style={{ ...cssVars, background: "var(--mlb-bg)", minHeight: "100vh" }}>
       <GlobalStyle />
+      <PatternDefs palette={palette} />
       <header className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sticky top-0 z-10" style={{ background: `${palette.bg}ee`, backdropFilter: "blur(6px)", borderBottom: `1px solid ${palette.border}` }}>
         <button onClick={() => setView("lobby")} className="mlb-focus flex items-center gap-2">
-          <svg width="24" height="24" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="none" stroke={palette.gold} strokeWidth="3" /><circle cx="20" cy="20" r="10" fill={palette.copper} /><circle cx="20" cy="20" r="4" fill={palette.teal} /></svg>
+          <ShieldMark palette={palette} size={26} />
           <span className="mlb-display text-lg" style={{ color: palette.text }}>MLABALABA</span>
         </button>
         <div className="flex items-center gap-2">
@@ -1430,13 +1592,14 @@ export default function App() {
           <IconBtn icon={dark ? Sun : Moon} label="Toggle theme" onClick={() => setDark((d) => !d)} />
         </div>
       </header>
+      <BeadDivider />
 
       <main className="flex-1 w-full px-4 sm:px-6 py-6 flex flex-col">
         {view === "lobby" && (
           <Lobby palette={palette} stats={stats} onStart={startGame} onTutorial={() => setView("tutorial")} onStats={() => setView("stats")} onOnline={() => setView("online")} />
         )}
         {view === "game" && (
-          <GameView key={gameKey.current} mode={mode} difficulty={difficulty} palette={palette} onExit={() => setView("lobby")} stats={stats} setStats={setStats} soundOn={soundOn} roomCode={roomCode} onlineRole={onlineRole} />
+          <GameView key={gameKey.current} mode={mode} difficulty={difficulty} palette={palette} onExit={() => setView("lobby")} stats={stats} setStats={setStats} soundOn={soundOn} roomCode={roomCode} onlineRole={onlineRole} pieceStyle={pieceStyle} />
         )}
         {view === "tutorial" && <TutorialView palette={palette} onBack={() => setView("lobby")} />}
         {view === "stats" && <StatsView stats={stats} palette={palette} onBack={() => setView("lobby")} />}
