@@ -590,71 +590,89 @@ function Avatar({ name, tone, size = 44 }) {
    BOARD
    ========================================================================= */
 
-const PIECE_STYLES = [
-  { id: "classic", label: "Classic" },
-  { id: "ukhamba", label: "Ukhamba" },
-  { id: "beads", label: "Ucu Beads" },
-  { id: "leopard", label: "Leopard" },
-];
+const PIECE_STYLE_INFO = {
+  isihlangu: { label: "Isihlangu", fillId: "shieldgrad" },
+  inkomo: { label: "Inkomo", fillId: "inkomograd" },
+  ucu: { label: "Ucu Ball", fillId: "ucugrad" },
+  leopard: { label: "Leopard", fillId: null }, // uses the leopard pattern directly
+};
+const AI_PIECE_STYLES = ["ucu", "leopard"];
+const ONLINE_PIECE_STYLES = ["isihlangu", "inkomo", "ucu", "leopard"];
 
 function pieceFill(style, defaultFill) {
+  const info = PIECE_STYLE_INFO[style];
+  if (!info) return defaultFill;
   if (style === "leopard") return "url(#mlbLeopard)";
-  return defaultFill;
+  return `url(#${info.fillId})`;
 }
 
 function PieceTexture({ style, cx, cy, r }) {
-  if (style === "ukhamba") {
+  if (style === "ucu") {
+    const colors = ["#D9A64C", "#C6672E", "#2F7566", "#F3ECDD", "#8A5A34"];
+    const count = 10;
+    return Array.from({ length: count }).map((_, i) => {
+      const angle = (i / count) * Math.PI * 2;
+      const bx = cx + Math.cos(angle) * r * 0.64;
+      const by = cy + Math.sin(angle) * r * 0.64;
+      return <circle key={i} cx={bx} cy={by} r={r * 0.16} fill={colors[i % colors.length]} stroke="#00000035" strokeWidth="0.7" />;
+    });
+  }
+  if (style === "isihlangu") {
     return (
       <>
-        <circle cx={cx} cy={cy} r={r * 0.72} fill="none" stroke="#00000035" strokeWidth="1.1" />
-        <circle cx={cx} cy={cy} r={r * 0.44} fill="none" stroke="#00000035" strokeWidth="1.1" />
+        <line x1={cx} y1={cy - r * 0.8} x2={cx} y2={cy + r * 0.8} stroke="#F3ECDD" strokeWidth={Math.max(1.4, r * 0.09)} opacity="0.8" />
+        <line x1={cx - r * 0.55} y1={cy - r * 0.35} x2={cx + r * 0.55} y2={cy - r * 0.35} stroke="#00000040" strokeWidth={Math.max(1, r * 0.06)} />
+        <line x1={cx - r * 0.62} y1={cy + r * 0.15} x2={cx + r * 0.62} y2={cy + r * 0.15} stroke="#00000040" strokeWidth={Math.max(1, r * 0.06)} />
+        <ellipse cx={cx} cy={cy} rx={r * 0.92} ry={r * 0.92} fill="none" stroke="#F3ECDD" strokeWidth={Math.max(1, r * 0.05)} opacity="0.5" />
       </>
     );
   }
-  if (style === "beads") {
-    const colors = ["#D9A64C", "#C6672E", "#2F7566", "#F3ECDD"];
-    return Array.from({ length: 8 }).map((_, i) => {
-      const angle = (i / 8) * Math.PI * 2;
-      const bx = cx + Math.cos(angle) * r * 0.62;
-      const by = cy + Math.sin(angle) * r * 0.62;
-      return <circle key={i} cx={bx} cy={by} r={r * 0.14} fill={colors[i % colors.length]} stroke="#00000030" strokeWidth="0.6" />;
-    });
+  if (style === "inkomo") {
+    return (
+      <>
+        <path d={`M ${cx - r * 0.55} ${cy - r * 0.35} Q ${cx - r * 0.85} ${cy - r * 0.75} ${cx - r * 0.45} ${cy - r * 0.85}`} fill="none" stroke="#EDE3CE" strokeWidth={Math.max(1.6, r * 0.14)} strokeLinecap="round" />
+        <path d={`M ${cx + r * 0.55} ${cy - r * 0.35} Q ${cx + r * 0.85} ${cy - r * 0.75} ${cx + r * 0.45} ${cy - r * 0.85}`} fill="none" stroke="#EDE3CE" strokeWidth={Math.max(1.6, r * 0.14)} strokeLinecap="round" />
+        <ellipse cx={cx} cy={cy + r * 0.25} rx={r * 0.34} ry={r * 0.24} fill="#00000030" />
+      </>
+    );
   }
   return null;
 }
 
-function PieceStylePicker({ value, onChange, palette }) {
+function PieceStylePicker({ value, onChange, palette, options }) {
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {PIECE_STYLES.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => onChange(s.id)}
-          className="mlb-focus flex flex-col items-center gap-1.5 rounded-lg py-2 transition-all"
-          style={{
-            background: value === s.id ? `${palette.gold}22` : "var(--mlb-surface2)",
-            border: `1.5px solid ${value === s.id ? palette.gold : "var(--mlb-border)"}`,
-          }}
-        >
-          <svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
-            <defs>
-              <radialGradient id={`pick-${s.id}`} cx="35%" cy="30%" r="70%">
-                <stop offset="0%" stopColor="#F0A46E" />
-                <stop offset="100%" stopColor={palette.copper} />
-              </radialGradient>
-            </defs>
-            <circle cx="20" cy="20" r="16" fill={pieceFill(s.id, `url(#pick-${s.id})`)} stroke="#00000033" strokeWidth="1.2" />
-            <PieceTexture style={s.id} cx={20} cy={20} r={16} />
-          </svg>
-          <span className="text-[10px] font-bold" style={{ color: "var(--mlb-text)" }}>{s.label}</span>
-        </button>
-      ))}
+    <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((id) => {
+        const info = PIECE_STYLE_INFO[id];
+        return (
+          <button
+            key={id}
+            onClick={() => onChange(id)}
+            className="mlb-focus flex flex-col items-center gap-1.5 rounded-lg py-2.5 transition-all"
+            style={{
+              background: value === id ? `${palette.gold}22` : "var(--mlb-surface2)",
+              border: `1.5px solid ${value === id ? palette.gold : "var(--mlb-border)"}`,
+            }}
+          >
+            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+              <defs>
+                <radialGradient id="pick-ucugrad" cx="35%" cy="30%" r="70%"><stop offset="0%" stopColor="#FFF8EA" /><stop offset="100%" stopColor="#E8D9B8" /></radialGradient>
+                <radialGradient id="pick-shieldgrad" cx="35%" cy="30%" r="70%"><stop offset="0%" stopColor="#C99A6B" /><stop offset="100%" stopColor="#8B5A34" /></radialGradient>
+                <radialGradient id="pick-inkomograd" cx="35%" cy="30%" r="70%"><stop offset="0%" stopColor="#4A3B32" /><stop offset="100%" stopColor="#1C140F" /></radialGradient>
+              </defs>
+              <circle cx="20" cy="20" r="17" fill={info.fillId ? `url(#pick-${info.fillId})` : "url(#mlbLeopard)"} stroke="#00000033" strokeWidth="1.2" />
+              <PieceTexture style={id} cx={20} cy={20} r={17} />
+            </svg>
+            <span className="text-[10px] font-bold" style={{ color: "var(--mlb-text)" }}>{info.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function Board({
-  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic",
+  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false,
 }) {
   const legalTargets = useMemo(() => {
     if (!interactive) return [];
@@ -671,6 +689,7 @@ function Board({
 
   const p1Color = palette.copper;
   const p2Color = palette.teal;
+  const pr = premium ? 21 : 18; // piece radius
 
   return (
     <svg viewBox="0 0 600 600" width="100%" height="100%" style={{ maxWidth: size, maxHeight: size }} role="img" aria-label="Mlabalaba board">
@@ -687,17 +706,48 @@ function Board({
           <stop offset="0%" stopColor="#6FC9B3" />
           <stop offset="100%" stopColor={p2Color} />
         </radialGradient>
+        <radialGradient id="ucugrad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#FFF8EA" /><stop offset="100%" stopColor="#E8D9B8" />
+        </radialGradient>
+        <radialGradient id="shieldgrad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#C99A6B" /><stop offset="100%" stopColor="#8B5A34" />
+        </radialGradient>
+        <radialGradient id="inkomograd" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#4A3B32" /><stop offset="100%" stopColor="#1C140F" />
+        </radialGradient>
+        {premium && (
+          <>
+            <pattern id="mlbWoodGrain" width="130" height="60" patternUnits="userSpaceOnUse" patternTransform="rotate(1)">
+              <path d="M0,10 Q32,3 65,10 T130,10" stroke="#00000030" strokeWidth="2.2" fill="none" />
+              <path d="M0,28 Q32,35 65,28 T130,28" stroke="#00000022" strokeWidth="1.6" fill="none" />
+              <path d="M0,46 Q32,39 65,46 T130,46" stroke="#00000030" strokeWidth="2.2" fill="none" />
+            </pattern>
+            <radialGradient id="mlbVignette" cx="50%" cy="50%" r="72%">
+              <stop offset="60%" stopColor="#000000" stopOpacity="0" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.35" />
+            </radialGradient>
+          </>
+        )}
       </defs>
 
-      <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity="0.15" />
+      <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity={premium ? 0.45 : 0.15} />
+      {premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWoodGrain)" opacity="0.7" />}
+      {premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbVignette)" />}
       <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />
       <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />
 
+      {premium && ALL_EDGES.map(([a, b], idx) => (
+        <line
+          key={`groove-${idx}`}
+          x1={POINTS[a].x} y1={POINTS[a].y} x2={POINTS[b].x} y2={POINTS[b].y}
+          stroke="#00000060" strokeWidth="5.5" strokeLinecap="round"
+        />
+      ))}
       {ALL_EDGES.map(([a, b], idx) => (
         <line
           key={idx}
           x1={POINTS[a].x} y1={POINTS[a].y} x2={POINTS[b].x} y2={POINTS[b].y}
-          stroke={palette.gold} strokeOpacity="0.55" strokeWidth="3" strokeLinecap="round"
+          stroke={palette.gold} strokeOpacity={premium ? 0.8 : 0.55} strokeWidth={premium ? 2.2 : 3} strokeLinecap="round"
         />
       ))}
 
@@ -713,14 +763,16 @@ function Board({
 
       {POINTS.map((pt, i) => {
         const occ = state.points[i];
+        const isMine = occ === myRole;
         const isSelected = state.selected === i;
         const isLegal = legalTargets.includes(i);
         const isSelectable = selectablePieces.includes(i);
         const isLastMoved = state.lastMoved && (state.lastMoved.to === i || state.lastMoved.from === i);
+        const baseFill = occ === "P1" ? "url(#p1grad)" : "url(#p2grad)";
         return (
           <g key={i}>
             <circle
-              cx={pt.x} cy={pt.y} r="16"
+              cx={pt.x} cy={pt.y} r={pr - 2}
               fill="transparent"
               onClick={() => interactive && onPointClick(i)}
               className={interactive && (isLegal || isSelectable) ? "cursor-pointer" : ""}
@@ -733,20 +785,20 @@ function Board({
               <circle cx={pt.x} cy={pt.y} r="13" fill={palette.gold} opacity="0.35" className="mlb-pulse" pointerEvents="none" />
             )}
             {isLegal && occ && (
-              <circle cx={pt.x} cy={pt.y} r="22" fill="none" stroke="#E15A3C" strokeWidth="3" className="mlb-pulse" pointerEvents="none" />
+              <circle cx={pt.x} cy={pt.y} r={pr + 4} fill="none" stroke="#E15A3C" strokeWidth="3" className="mlb-pulse" pointerEvents="none" />
             )}
             {occ && (
               <g className={isLastMoved ? "mlb-pop" : ""} pointerEvents="none">
-                <circle cx={pt.x} cy={pt.y} r="19" fill="#00000055" transform="translate(0,2)" />
+                <circle cx={pt.x} cy={pt.y} r={pr + 1} fill="#00000055" transform="translate(0,2)" />
                 <circle
-                  cx={pt.x} cy={pt.y} r="18"
-                  fill={occ === "P1" ? pieceFill(pieceStyle, "url(#p1grad)") : "url(#p2grad)"}
+                  cx={pt.x} cy={pt.y} r={pr}
+                  fill={isMine ? pieceFill(pieceStyle, baseFill) : baseFill}
                   stroke={isSelected ? palette.gold : "#00000033"}
                   strokeWidth={isSelected ? 4 : 1.5}
                 />
-                {occ === "P1" && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={18} />}
+                {isMine && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
                 {isSelectable && (
-                  <circle cx={pt.x} cy={pt.y} r="24" fill="none" stroke={palette.gold} strokeWidth="2.5" className="mlb-ring" />
+                  <circle cx={pt.x} cy={pt.y} r={pr + 6} fill="none" stroke={palette.gold} strokeWidth="2.5" className="mlb-ring" />
                 )}
               </g>
             )}
@@ -1058,6 +1110,7 @@ function OnlinePanel({ palette, onBack, onEnterRoom }) {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pieceStyle, setPieceStyle] = useState("ucu");
 
   if (!isSupabaseConfigured) {
     return (
@@ -1087,7 +1140,7 @@ function OnlinePanel({ palette, onBack, onEnterRoom }) {
     setError("");
     try {
       const code = await createRoom(createInitialState());
-      onEnterRoom(code, "P1");
+      onEnterRoom(code, "P1", pieceStyle);
     } catch (e) {
       setError(e.message || "Could not create a room. Check your Supabase setup.");
     } finally {
@@ -1101,7 +1154,7 @@ function OnlinePanel({ palette, onBack, onEnterRoom }) {
     setError("");
     try {
       await joinRoom(joinCode.trim().toUpperCase());
-      onEnterRoom(joinCode.trim().toUpperCase(), "P2");
+      onEnterRoom(joinCode.trim().toUpperCase(), "P2", pieceStyle);
     } catch (e) {
       setError(e.message || "Could not join that room.");
     } finally {
@@ -1120,6 +1173,11 @@ function OnlinePanel({ palette, onBack, onEnterRoom }) {
           <Wifi size={18} />
           <p className="font-bold text-sm">Connected to your Supabase project</p>
         </div>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--mlb-textDim)" }}>Your piece style</p>
+          <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={ONLINE_PIECE_STYLES} />
+        </div>
+
         <div className="flex gap-2">
           <button onClick={() => { setTab("create"); setError(""); }} className="mlb-focus flex-1 rounded-xl py-2 font-bold text-sm"
             style={{ background: tab === "create" ? "var(--mlb-gold)" : "var(--mlb-surface2)", color: tab === "create" ? "#181310" : "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}>
@@ -1229,7 +1287,7 @@ function ModeCard({ icon: Icon, title, desc, onClick, accent }) {
 
 function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline }) {
   const [difficulty, setDifficulty] = useState("intermediate");
-  const [pieceStyle, setPieceStyle] = useState("classic");
+  const [pieceStyle, setPieceStyle] = useState("ucu");
   const canPickPiece = difficulty === "advanced" || difficulty === "expert";
   const winPct = stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
   return (
@@ -1283,9 +1341,9 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline }) {
             <div className="rounded-2xl p-5 flex flex-col gap-3 sm:col-span-2" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
               <p className="font-bold" style={{ color: "var(--mlb-text)" }}>Choose your piece</p>
               <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Unlocked on Advanced and Expert — pick the style your pieces play with.</p>
-              <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} />
+              <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={AI_PIECE_STYLES} />
               <button onClick={() => onStart("ai", difficulty, pieceStyle)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
-                <Play size={16} /> Start vs {difficulty} with {PIECE_STYLES.find((p) => p.id === pieceStyle).label}
+                <Play size={16} /> Start vs {difficulty} with {PIECE_STYLE_INFO[pieceStyle].label}
               </button>
             </div>
           )}
@@ -1321,6 +1379,8 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
   const applyingRemote = useRef(false);
 
   const isOnline = mode === "online";
+  const myRole = isOnline ? (onlineRole || "P1") : "P1";
+  const isPremium = isOnline || (mode === "ai" && (difficulty === "advanced" || difficulty === "expert"));
 
   const names = mode === "ai" ? { P1: "You", P2: `AI (${difficulty})` }
     : isOnline ? { P1: onlineRole === "P1" ? "You" : "Opponent", P2: onlineRole === "P2" ? "You" : "Opponent" }
@@ -1522,7 +1582,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
       <div className="grid lg:grid-cols-[220px_1fr_220px] gap-4 items-start">
         <div className="order-2 lg:order-1"><PlayerCard side="P1" name={names.P1} avatarTone={palette.copper} isTurn={state.currentPlayer === "P1" && !state.gameOver} state={state} profile={p1Profile} /></div>
         <div className="order-1 lg:order-2 flex justify-center rounded-2xl p-3 sm:p-6" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} />
+          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} myRole={myRole} premium={isPremium} />
         </div>
         <div className="order-3 flex flex-col gap-4">
           <PlayerCard side="P2" name={names.P2} avatarTone={palette.teal} isTurn={state.currentPlayer === "P2" && !state.gameOver} state={state} profile={p2Profile} mirrored />
@@ -1570,11 +1630,12 @@ export default function App() {
     setView("game");
   };
 
-  const enterOnlineRoom = (code, role) => {
+  const enterOnlineRoom = (code, role, ps) => {
     gameKey.current += 1;
     setRoomCode(code);
     setOnlineRole(role);
     setMode("online");
+    setPieceStyle(ps || "ucu");
     setView("game");
   };
 
