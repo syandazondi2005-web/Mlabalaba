@@ -671,6 +671,37 @@ function PieceStylePicker({ value, onChange, palette, options }) {
   );
 }
 
+function BoardEngraving({ cx, cy, scale, flip, kind }) {
+  const s = flip ? -scale : scale;
+  if (kind === "antelope") {
+    return (
+      <g transform={`translate(${cx},${cy}) scale(${s},${scale})`} fill="#D8BE8A" opacity="0.4" pointerEvents="none">
+        <ellipse cx="0" cy="0" rx="20" ry="8.5" />
+        <rect x="-16" y="6" width="4.5" height="15" rx="1" />
+        <rect x="-7" y="6" width="4.5" height="15" rx="1" />
+        <rect x="3" y="6" width="4.5" height="15" rx="1" />
+        <rect x="12" y="6" width="4.5" height="15" rx="1" />
+        <path d="M 15,-5 Q 13,-12 18,-16 L 21,-13 Q 18,-10 19,-4 Z" />
+        <path d="M 18,-13 Q 20,-22 27,-27 L 29,-23 Q 24,-19 22,-10 Z" />
+        <path d="M 27,-25 Q 32,-32 30,-40 L 33,-38 Q 34,-30 29,-22 Z" />
+        <ellipse cx="22" cy="-2" rx="4" ry="3" />
+      </g>
+    );
+  }
+  return (
+    <g transform={`translate(${cx},${cy}) scale(${scale})`} fill="#D8BE8A" opacity="0.38" pointerEvents="none">
+      <ellipse cx="0" cy="0" rx="22" ry="10" />
+      <rect x="-18" y="7" width="5" height="16" rx="1.5" />
+      <rect x="-7" y="7" width="5" height="16" rx="1.5" />
+      <rect x="4" y="7" width="5" height="16" rx="1.5" />
+      <rect x="14" y="7" width="5" height="16" rx="1.5" />
+      <ellipse cx="24" cy="-3" rx="6" ry="4.5" />
+      <path d="M 21,-8 Q 16,-16 20,-20 L 23,-18 Q 21,-14 24,-9 Z" />
+      <path d="M 27,-8 Q 32,-16 28,-20 L 25,-18 Q 27,-14 24,-9 Z" />
+    </g>
+  );
+}
+
 function Board({
   state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false,
 }) {
@@ -717,22 +748,38 @@ function Board({
         </radialGradient>
         {premium && (
           <>
-            <pattern id="mlbWoodGrain" width="130" height="60" patternUnits="userSpaceOnUse" patternTransform="rotate(1)">
-              <path d="M0,10 Q32,3 65,10 T130,10" stroke="#00000030" strokeWidth="2.2" fill="none" />
-              <path d="M0,28 Q32,35 65,28 T130,28" stroke="#00000022" strokeWidth="1.6" fill="none" />
-              <path d="M0,46 Q32,39 65,46 T130,46" stroke="#00000030" strokeWidth="2.2" fill="none" />
-            </pattern>
+            <filter id="mlbHorn" x="-20%" y="-20%" width="140%" height="140%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.006 0.05" numOctaves="5" seed="24" result="noise" />
+              <feComponentTransfer in="noise" result="banded">
+                <feFuncA type="discrete" tableValues="0 0 0.1 0.22 0.42 0.65 0.85 0.65 0.42 0.22 0.1 0" />
+              </feComponentTransfer>
+              <feColorMatrix in="banded" type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.14  0 0 0 0 0.06  0 0 0 1 0" result="streaks" />
+              <feFlood floodColor="#0f0a06" result="darkBase" />
+              <feMerge>
+                <feMergeNode in="darkBase" />
+                <feMergeNode in="streaks" />
+              </feMerge>
+            </filter>
             <radialGradient id="mlbVignette" cx="50%" cy="50%" r="72%">
-              <stop offset="60%" stopColor="#000000" stopOpacity="0" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.35" />
+              <stop offset="45%" stopColor="#000000" stopOpacity="0" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.65" />
             </radialGradient>
           </>
         )}
       </defs>
 
-      <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity={premium ? 0.45 : 0.15} />
-      {premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWoodGrain)" opacity="0.7" />}
-      {premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbVignette)" />}
+      {!premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity="0.15" />}
+      {premium && (
+        <>
+          <rect x="10" y="10" width="580" height="580" rx="26" fill="#1c140e" filter="url(#mlbHorn)" />
+          <rect x="10" y="10" width="580" height="580" rx="26" fill="#000000" opacity="0.3" />
+          <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbVignette)" />
+          <BoardEngraving cx={85} cy={130} scale={1.5} flip={false} kind="antelope" />
+          <BoardEngraving cx={515} cy={130} scale={1.5} flip={true} kind="antelope" />
+          <BoardEngraving cx={85} cy={470} scale={1.4} flip={false} kind="cattle" />
+          <BoardEngraving cx={515} cy={470} scale={-1.4} flip={false} kind="cattle" />
+        </>
+      )}
       <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />
       <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />
 
@@ -778,6 +825,12 @@ function Board({
               className={interactive && (isLegal || isSelectable) ? "cursor-pointer" : ""}
               style={{ pointerEvents: interactive ? "all" : "none" }}
             />
+            {premium && (
+              <>
+                <circle cx={pt.x} cy={pt.y} r={pr + 5} fill="none" stroke="#1c140e" strokeWidth="4" pointerEvents="none" />
+                <circle cx={pt.x} cy={pt.y} r={pr + 5} fill="none" stroke="#E8C468" strokeWidth="2.6" pointerEvents="none" />
+              </>
+            )}
             {!occ && (
               <circle cx={pt.x} cy={pt.y} r="7" fill={palette.border} opacity="0.8" pointerEvents="none" />
             )}
@@ -797,6 +850,9 @@ function Board({
                   strokeWidth={isSelected ? 4 : 1.5}
                 />
                 {isMine && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
+                {premium && (
+                  <ellipse cx={pt.x - pr * 0.3} cy={pt.y - pr * 0.35} rx={pr * 0.22} ry={pr * 0.14} fill="#ffffff" opacity={occ === "P1" ? 0.55 : 0.3} />
+                )}
                 {isSelectable && (
                   <circle cx={pt.x} cy={pt.y} r={pr + 6} fill="none" stroke={palette.gold} strokeWidth="2.5" className="mlb-ring" />
                 )}
