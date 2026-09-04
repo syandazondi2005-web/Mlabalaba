@@ -1,0 +1,21 @@
+name: Keep Supabase Project Active
+
+on:
+  schedule:
+    # Runs every 3 days at 09:00 UTC — safely under Supabase's 7-day limit
+    - cron: '0 9 */3 * *'
+  workflow_dispatch: # lets you trigger it manually from the GitHub Actions tab too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase rooms table
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/rooms?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
