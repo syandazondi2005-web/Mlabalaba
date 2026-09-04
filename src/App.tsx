@@ -5,7 +5,7 @@ import {
   Swords, Target, Shield, Sparkles, ArrowLeft, Check, Copy, Clock, Loader2
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { createRoom, joinRoom, pushRoomState, leaveRoom, subscribeToRoom } from "./lib/rooms";
+import { createRoom, joinRoom, pushRoomState, leaveRoom, subscribeToRoom, sendMessage } from "./lib/rooms";
 
 /* =========================================================================
    ENGINE  —  pure, UI-independent Mlabalaba (Morabaraba-family) rules
@@ -703,7 +703,7 @@ function BoardEngraving({ cx, cy, scale, flip, kind }) {
 }
 
 function Board({
-  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false,
+  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false, opponentPieceStyle = null,
 }) {
   const legalTargets = useMemo(() => {
     if (!interactive) return [];
@@ -845,11 +845,12 @@ function Board({
                 <circle cx={pt.x} cy={pt.y} r={pr + 1} fill="#00000055" transform="translate(0,2)" />
                 <circle
                   cx={pt.x} cy={pt.y} r={pr}
-                  fill={isMine ? pieceFill(pieceStyle, baseFill) : baseFill}
+                  fill={isMine ? pieceFill(pieceStyle, baseFill) : (opponentPieceStyle ? pieceFill(opponentPieceStyle, baseFill) : baseFill)}
                   stroke={isSelected ? palette.gold : "#00000033"}
                   strokeWidth={isSelected ? 4 : 1.5}
                 />
                 {isMine && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
+                {!isMine && opponentPieceStyle && <PieceTexture style={opponentPieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
                 {premium && (
                   <ellipse cx={pt.x - pr * 0.3} cy={pt.y - pr * 0.35} rx={pr * 0.22} ry={pr * 0.14} fill="#ffffff" opacity={occ === "P1" ? 0.55 : 0.3} />
                 )}
@@ -933,6 +934,58 @@ function Stat({ label, value }) {
    MOVE HISTORY
    ========================================================================= */
 
+function ChatPanel({ messages, myRole, onSend }) {
+  const [draft, setDraft] = useState("");
+  const scrollRef = useRef(null);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages.length]);
+
+  const submit = () => {
+    if (!draft.trim()) return;
+    onSend(draft);
+    setDraft("");
+  };
+
+  return (
+    <div className="rounded-2xl p-3 flex flex-col" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+      <p className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: "var(--mlb-textDim)" }}>Chat</p>
+      <div ref={scrollRef} className="flex flex-col gap-1.5 max-h-40 overflow-y-auto mlb-scroll pr-1 mb-2">
+        {messages.length === 0 && <p className="text-xs italic px-1" style={{ color: "var(--mlb-textDim)" }}>Say hello, or ask about a rematch once the game ends.</p>}
+        {messages.map((m, i) => {
+          const mine = m.role === myRole;
+          return (
+            <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <span
+                className="text-xs px-2.5 py-1.5 rounded-xl max-w-[80%] break-words"
+                style={{
+                  background: mine ? "var(--mlb-gold)" : "var(--mlb-surface2)",
+                  color: mine ? "#181310" : "var(--mlb-text)",
+                }}
+              >
+                {m.text}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          maxLength={200}
+          placeholder="Type a message…"
+          aria-label="Chat message"
+          className="mlb-focus flex-1 rounded-lg px-3 py-1.5 text-xs"
+          style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}
+        />
+        <button onClick={submit} className="mlb-focus rounded-lg px-3 py-1.5 text-xs font-bold" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MoveHistory({ history }) {
   return (
     <div className="rounded-2xl p-3 flex flex-col" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
@@ -1000,14 +1053,14 @@ function Confetti() {
   );
 }
 
-function ResultsModal({ state, names, onRematch, onLobby, matchSeconds }) {
+function ResultsModal({ state, names, onRematch, onLobby, matchSeconds, isOnline, chatProps }) {
   if (!state.gameOver) return null;
   const winner = state.gameOver.winner;
   const loser = OPP(winner);
   const mins = Math.floor(matchSeconds / 60), secs = matchSeconds % 60;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#000000aa" }}>
-      <div className="relative mlb-pop rounded-3xl p-6 sm:p-8 w-full max-w-md overflow-hidden" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+      <div className="relative mlb-pop rounded-3xl p-6 sm:p-8 w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto mlb-scroll" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
         <svg className="absolute inset-x-0 top-0" width="100%" height="10" style={{ display: "block" }} aria-hidden="true">
           <rect width="100%" height="100%" fill="url(#mlbLeopard)" />
         </svg>
@@ -1027,6 +1080,12 @@ function ResultsModal({ state, names, onRematch, onLobby, matchSeconds }) {
           <span>Moves: {state.moveHistory.length}</span>
           <span className="flex items-center gap-1"><Clock size={12} /> {mins}:{secs.toString().padStart(2, "0")}</span>
         </div>
+        {isOnline && chatProps && (
+          <div className="relative mt-5">
+            <p className="text-xs font-bold mb-1.5" style={{ color: "var(--mlb-textDim)" }}>Want a rematch? Say so here:</p>
+            <ChatPanel {...chatProps} />
+          </div>
+        )}
         <div className="relative flex gap-3 mt-6">
           <button onClick={onRematch} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
             <RotateCcw size={16} /> Rematch
@@ -1429,6 +1488,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
   const [history, setHistory] = useState([]);
   const [seconds, setSeconds] = useState(0);
   const [opponentJoined, setOpponentJoined] = useState(onlineRole === "P2");
+  const [messages, setMessages] = useState([]);
   const beep = useBeeper(soundOn);
   const statsSaved = useRef(false);
   const timerRef = useRef(null);
@@ -1437,6 +1497,9 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
   const isOnline = mode === "online";
   const myRole = isOnline ? (onlineRole || "P1") : "P1";
   const isPremium = isOnline || (mode === "ai" && (difficulty === "advanced" || difficulty === "expert"));
+  const opponentPieceStyle = (mode === "ai" && isPremium)
+    ? AI_PIECE_STYLES.find((s) => s !== pieceStyle) || AI_PIECE_STYLES[0]
+    : null;
 
   const names = mode === "ai" ? { P1: "You", P2: `AI (${difficulty})` }
     : isOnline ? { P1: onlineRole === "P1" ? "You" : "Opponent", P2: onlineRole === "P2" ? "You" : "Opponent" }
@@ -1451,6 +1514,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
         applyingRemote.current = true;
         setState(row.state);
       }
+      if (row.messages) setMessages(row.messages);
     });
     return () => { unsubscribe(); leaveRoom(roomCode, onlineRole); };
   }, [isOnline, roomCode, onlineRole]);
@@ -1570,6 +1634,13 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
     // the state-change effect above will push `fresh` to the room automatically
   };
 
+  const handleSendChat = (text) => {
+    if (!text.trim() || !roomCode) return;
+    const optimistic = [...messages, { role: myRole, text: text.trim(), ts: Date.now() }].slice(-50);
+    setMessages(optimistic);
+    sendMessage(roomCode, myRole, text.trim());
+  };
+
   if (isOnline && !opponentJoined) {
     return (
       <div className="mlb-fade-in w-full max-w-lg mx-auto flex flex-col items-center gap-5 text-center py-10">
@@ -1638,7 +1709,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
       <div className="grid lg:grid-cols-[220px_1fr_220px] gap-4 items-start">
         <div className="order-2 lg:order-1"><PlayerCard side="P1" name={names.P1} avatarTone={palette.copper} isTurn={state.currentPlayer === "P1" && !state.gameOver} state={state} profile={p1Profile} /></div>
         <div className="order-1 lg:order-2 flex justify-center rounded-2xl p-3 sm:p-6" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} myRole={myRole} premium={isPremium} />
+          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} myRole={myRole} premium={isPremium} opponentPieceStyle={opponentPieceStyle} />
         </div>
         <div className="order-3 flex flex-col gap-4">
           <PlayerCard side="P2" name={names.P2} avatarTone={palette.teal} isTurn={state.currentPlayer === "P2" && !state.gameOver} state={state} profile={p2Profile} mirrored />
@@ -1646,8 +1717,9 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
       </div>
 
       <MoveHistory history={state.moveHistory} />
+      {isOnline && <ChatPanel messages={messages} myRole={myRole} onSend={handleSendChat} />}
 
-      <ResultsModal state={state} names={names} matchSeconds={seconds} onRematch={handleRematch} onLobby={onExit} />
+      <ResultsModal state={state} names={names} matchSeconds={seconds} onRematch={handleRematch} onLobby={onExit} isOnline={isOnline} chatProps={{ messages, myRole, onSend: handleSendChat }} />
     </div>
   );
 }
