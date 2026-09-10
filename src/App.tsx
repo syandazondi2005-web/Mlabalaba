@@ -1497,7 +1497,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
   const isOnline = mode === "online";
   const myRole = isOnline ? (onlineRole || "P1") : "P1";
   const isPremium = isOnline || (mode === "ai" && (difficulty === "advanced" || difficulty === "expert"));
-  const opponentPieceStyle = (mode === "ai" && isPremium)
+  const opponentPieceStyle = (mode === "ai" && AI_PIECE_STYLES.includes(pieceStyle))
     ? AI_PIECE_STYLES.find((s) => s !== pieceStyle) || AI_PIECE_STYLES[0]
     : null;
 
