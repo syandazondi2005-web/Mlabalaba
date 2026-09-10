@@ -51,6 +51,14 @@ export async function leaveRoom(code, role) {
   await supabase.from("rooms").update(field).eq("id", code);
 }
 
+export async function sendMessage(code, role, text) {
+  if (!supabase) return;
+  const { data } = await supabase.from("rooms").select("messages").eq("id", code).maybeSingle();
+  const current = (data && data.messages) || [];
+  const next = [...current, { role, text, ts: Date.now() }].slice(-50); // keep the last 50
+  await supabase.from("rooms").update({ messages: next, updated_at: new Date().toISOString() }).eq("id", code);
+}
+
 export function subscribeToRoom(code, onChange) {
   if (!supabase) return () => {};
   const channel = supabase
