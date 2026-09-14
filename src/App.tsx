@@ -1,14 +1,21 @@
+"use client";
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Users, Bot, BookOpen, Trophy, Volume2, VolumeX, Moon, Sun, RotateCcw,
   Play, X, ChevronRight, ChevronLeft, Crown, Info, Wifi, WifiOff,
-  Swords, Target, Shield, Sparkles, ArrowLeft, Check, Copy, Clock, Loader2
+  Swords, Target, Shield, Sparkles, ArrowLeft, Check, Copy, Clock, Loader2, Globe, Cpu
 } from "lucide-react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { createRoom, joinRoom, pushRoomState, leaveRoom, subscribeToRoom, sendMessage } from "./lib/rooms";
 
 /* =========================================================================
-   ENGINE  —  pure, UI-independent Mlabalaba (Morabaraba-family) rules
+   BOARD IMAGE CONSTANT
+   ========================================================================= */
+const BOARD_IMAGE_URL = "/Board.jpg";
+
+/* =========================================================================
+   ENGINE — pure, UI-independent Mlabalaba (Morabaraba-family) rules
    ========================================================================= */
 
 const POINTS = [
@@ -44,84 +51,84 @@ const ADJACENCY = Array.from({ length: 24 }, () => new Set<number>());
 ALL_EDGES.forEach(([a, b]) => { ADJACENCY[a].add(b); ADJACENCY[b].add(a); });
 
 const PIECES_PER_PLAYER = 12;
-const OPP = (p) => (p === "P1" ? "P2" : "P1");
+const OPP = (p: string) => (p === "P1" ? "P2" : "P1");
 
 function createInitialState() {
   return {
     points: Array(24).fill(null),
     phase: "placement",
     placedCount: { P1: 0, P2: 0 },
-    capturedCount: { P1: 0, P2: 0 }, // pieces THIS player has LOST
-    capturedBy: { P1: [], P2: [] }, // pieces this player has TAKEN (opponent's color)
+    capturedCount: { P1: 0, P2: 0 },
+    capturedBy: { P1: [], P2: [] },
     millsFormed: { P1: 0, P2: 0 },
     currentPlayer: "P1",
-    selected: null,
+    selected: null as number | null,
     pendingCapture: false,
-    lastMillPoints: [],
-    lastMoved: null,
-    moveHistory: [],
-    gameOver: null,
+    lastMillPoints: [] as number[],
+    lastMoved: null as { from?: number; to: number } | null,
+    moveHistory: [] as { n: number; text: string; player: string }[],
+    gameOver: null as { winner: string; reason: string } | null,
     moveCount: 0,
   };
 }
 
-function totalOwned(state, player) {
+function totalOwned(state: any, player: string) {
   return PIECES_PER_PLAYER - state.capturedCount[player];
 }
 
-function onBoardCount(state, player) {
-  return state.points.filter((p) => p === player).length;
+function onBoardCount(state: any, player: string) {
+  return state.points.filter((p: string | null) => p === player).length;
 }
 
-function millPointsFor(points, player) {
-  const set = new Set();
+function millPointsFor(points: (string | null)[], player: string) {
+  const set = new Set<number>();
   MILLS.forEach((line) => {
     if (line.every((i) => points[i] === player)) line.forEach((i) => set.add(i));
   });
   return set;
 }
 
-function isFlying(state, player) {
+function isFlying(state: any, player: string) {
   return state.phase === "movement" && onBoardCount(state, player) === 3;
 }
 
-function getLegalPlacements(state) {
+function getLegalPlacements(state: any) {
   if (state.phase !== "placement") return [];
-  return state.points.map((v, i) => (v === null ? i : -1)).filter((i) => i >= 0);
+  return state.points.map((v: string | null, i: number) => (v === null ? i : -1)).filter((i: number) => i >= 0);
 }
 
-function getLegalDestinations(state, from) {
+function getLegalDestinations(state: any, from: number) {
   const player = state.points[from];
   if (!player) return [];
   if (isFlying(state, player)) {
-    return state.points.map((v, i) => (v === null ? i : -1)).filter((i) => i >= 0);
+    return state.points.map((v: string | null, i: number) => (v === null ? i : -1)).filter((i: number) => i >= 0);
   }
   return [...ADJACENCY[from]].filter((i) => state.points[i] === null);
 }
 
-function getMovablePieces(state, player) {
+function getMovablePieces(state: any, player: string) {
   return state.points
-    .map((v, i) => (v === player ? i : -1))
-    .filter((i) => i >= 0 && getLegalDestinations(state, i).length > 0);
+    .map((v: string | null, i: number) => (v === player ? i : -1))
+    .filter((i: number) => i >= 0 && getLegalDestinations(state, i).length > 0);
 }
 
-function newMillsFrom(points, player, touchedPoint) {
+function newMillsFrom(points: (string | null)[], player: string, touchedPoint: number) {
   return MILLS.filter(
     (line) => line.includes(touchedPoint) && line.every((i) => points[i] === player)
   );
 }
 
-function getCapturablePoints(state, capturingPlayer) {
+function getCapturablePoints(state: any, capturingPlayer: string) {
   const opponent = OPP(capturingPlayer);
   const oppPoints = state.points
-    .map((v, i) => (v === opponent ? i : -1))
-    .filter((i) => i >= 0);
+    .map((v: string | null, i: number) => (v === opponent ? i : -1))
+    .filter((i: number) => i >= 0);
   const millSet = millPointsFor(state.points, opponent);
-  const free = oppPoints.filter((i) => !millSet.has(i));
+  const free = oppPoints.filter((i: number) => !millSet.has(i));
   return free.length > 0 ? free : oppPoints;
 }
 
-function checkWinner(state) {
+function checkWinner(state: any) {
   for (const player of ["P1", "P2"]) {
     const opponent = OPP(player);
     if (state.phase === "movement" || totalOwned(state, opponent) < PIECES_PER_PLAYER) {
@@ -139,14 +146,14 @@ function checkWinner(state) {
   return null;
 }
 
-function logMove(state, text) {
+function logMove(state: any, text: string) {
   state.moveHistory = [
     ...state.moveHistory,
     { n: state.moveHistory.length + 1, text, player: state.currentPlayer },
   ];
 }
 
-function finishTurnOrCapture(state, millLines) {
+function finishTurnOrCapture(state: any, millLines: number[][]) {
   if (millLines.length > 0) {
     state.lastMillPoints = [...new Set(millLines.flat())];
     state.millsFormed[state.currentPlayer] += millLines.length;
@@ -161,7 +168,7 @@ function finishTurnOrCapture(state, millLines) {
   return state;
 }
 
-function advanceTurn(state) {
+function advanceTurn(state: any) {
   state.selected = null;
   state.pendingCapture = false;
   if (
@@ -177,7 +184,7 @@ function advanceTurn(state) {
   if (w) state.gameOver = w;
 }
 
-function applyPlace(prev, point) {
+function applyPlace(prev: any, point: number) {
   const state = structuredCloneState(prev);
   if (state.gameOver || state.pendingCapture) return state;
   if (state.points[point] !== null) return state;
@@ -190,7 +197,7 @@ function applyPlace(prev, point) {
   return finishTurnOrCapture(state, mills);
 }
 
-function applySelect(prev, point) {
+function applySelect(prev: any, point: number) {
   const state = structuredCloneState(prev);
   if (state.gameOver || state.pendingCapture || state.phase !== "movement") return state;
   const player = state.currentPlayer;
@@ -202,7 +209,7 @@ function applySelect(prev, point) {
   return state;
 }
 
-function applyMove(prev, from, to) {
+function applyMove(prev: any, from: number, to: number) {
   const state = structuredCloneState(prev);
   if (state.gameOver || state.pendingCapture) return state;
   const player = state.currentPlayer;
@@ -217,7 +224,7 @@ function applyMove(prev, from, to) {
   return finishTurnOrCapture(state, mills);
 }
 
-function applyCapture(prev, point) {
+function applyCapture(prev: any, point: number) {
   const state = structuredCloneState(prev);
   if (!state.pendingCapture) return state;
   const player = state.currentPlayer;
@@ -233,7 +240,7 @@ function applyCapture(prev, point) {
   return state;
 }
 
-function structuredCloneState(state) {
+function structuredCloneState(state: any) {
   return {
     ...state,
     points: [...state.points],
@@ -246,34 +253,33 @@ function structuredCloneState(state) {
 }
 
 /* =========================================================================
-   AI  —  heuristic + depth-limited minimax, scaled by difficulty
+   AI — heuristic + depth-limited minimax
    ========================================================================= */
 
-function enumerateActions(state, player) {
-  const actions = [];
+function enumerateActions(state: any, player: string) {
+  const actions: any[] = [];
   if (state.pendingCapture) {
-    getCapturablePoints(state, player).forEach((point) => actions.push({ type: "capture", point }));
+    getCapturablePoints(state, player).forEach((point: number) => actions.push({ type: "capture", point }));
     return actions;
   }
   if (state.phase === "placement") {
-    getLegalPlacements(state).forEach((point) => actions.push({ type: "place", point }));
+    getLegalPlacements(state).forEach((point: number) => actions.push({ type: "place", point }));
   } else {
-    getMovablePieces(state, player).forEach((from) => {
-      getLegalDestinations(state, from).forEach((to) => actions.push({ type: "move", from, to }));
+    getMovablePieces(state, player).forEach((from: number) => {
+      getLegalDestinations(state, from).forEach((to: number) => actions.push({ type: "move", from, to }));
     });
   }
   return actions;
 }
 
-function applyAction(state, action) {
+function applyAction(state: any, action: any) {
   if (action.type === "place") return applyPlace(state, action.point);
   if (action.type === "move") return applyMove(state, action.from, action.to);
   if (action.type === "capture") return applyCapture(state, action.point);
   return state;
 }
 
-function countPotentialMills(state, player) {
-  // lines with exactly 2 of this player's pieces and 1 empty point — a threat one move from completing
+function countPotentialMills(state: any, player: string) {
   let count = 0;
   for (const line of MILLS) {
     const vals = line.map((i) => state.points[i]);
@@ -284,7 +290,7 @@ function countPotentialMills(state, player) {
   return count;
 }
 
-function evaluate(state, player) {
+function evaluate(state: any, player: string) {
   if (state.gameOver) {
     if (state.gameOver.winner === player) return 100000;
     if (state.gameOver.winner === OPP(player)) return -100000;
@@ -307,7 +313,7 @@ function evaluate(state, player) {
   );
 }
 
-function bestCaptureFor(state, player) {
+function bestCaptureFor(state: any, player: string) {
   const options = getCapturablePoints(state, player);
   let best = options[0];
   let bestScore = -Infinity;
@@ -319,7 +325,7 @@ function bestCaptureFor(state, player) {
   return best;
 }
 
-function minimax(state, player, depth, alpha, beta, maximizing, rootPlayer) {
+function minimax(state: any, player: string, depth: number, alpha: number, beta: number, maximizing: boolean, rootPlayer: string): number {
   if (depth === 0 || state.gameOver) return evaluate(state, rootPlayer);
   const actor = state.pendingCapture ? state.currentPlayer : state.currentPlayer;
   const actions = enumerateActions(state, actor);
@@ -349,16 +355,18 @@ function minimax(state, player, depth, alpha, beta, maximizing, rootPlayer) {
   }
 }
 
-function chooseAiAction(state, player, difficulty) {
+function chooseAiAction(state: any, player: string, difficulty: string) {
   const actions = enumerateActions(state, player);
   if (actions.length === 0) return null;
 
   if (state.pendingCapture) {
-    if (difficulty === "beginner") return { type: "capture", point: actions[Math.floor(Math.random() * actions.length)].point };
+    if (difficulty === "beginner" || difficulty === "easy") {
+      return { type: "capture", point: actions[Math.floor(Math.random() * actions.length)].point };
+    }
     return { type: "capture", point: bestCaptureFor(state, player) };
   }
 
-  if (difficulty === "beginner") {
+  if (difficulty === "beginner" || difficulty === "easy") {
     const millMakers = actions.filter((a) => {
       const next = applyAction(state, a);
       return next.pendingCapture;
@@ -369,8 +377,8 @@ function chooseAiAction(state, player, difficulty) {
     return actions[Math.floor(Math.random() * actions.length)];
   }
 
-  const depth = { intermediate: 1, advanced: 2, expert: 4 }[difficulty] || 1;
-  const epsilon = { intermediate: 0.15, advanced: 0.03, expert: 0 }[difficulty] ?? 0.1;
+  const depth = { intermediate: 1, medium: 2, advanced: 3, expert: 4 }[difficulty] || 1;
+  const epsilon = { intermediate: 0.15, medium: 0.1, advanced: 0.03, expert: 0 }[difficulty] ?? 0.1;
 
   if (Math.random() < epsilon) return actions[Math.floor(Math.random() * actions.length)];
 
@@ -388,7 +396,7 @@ function chooseAiAction(state, player, difficulty) {
 }
 
 /* =========================================================================
-   PERSISTENCE
+   PERSISTENCE & STATS
    ========================================================================= */
 
 const STATS_KEY = "mlabalaba:stats:v1";
@@ -396,7 +404,7 @@ const defaultStats = () => ({
   gamesPlayed: 0, gamesWon: 0, gamesLost: 0,
   piecesCaptured: 0, millsFormed: 0,
   bestStreak: 0, currentStreak: 0,
-  recent: [], // {result, opponent, date, moves}
+  recent: [],
 });
 
 async function loadStats() {
@@ -405,17 +413,14 @@ async function loadStats() {
     return raw ? JSON.parse(raw) : defaultStats();
   } catch { return defaultStats(); }
 }
-async function saveStats(stats) {
-  try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch {}
-}
 
 /* =========================================================================
    SOUND
    ========================================================================= */
 
-function useBeeper(enabled) {
-  const ctxRef = useRef(null);
-  const play = useCallback((freqs = [440], dur = 0.09, type = "sine") => {
+function useBeeper(enabled: boolean) {
+  const ctxRef = useRef<AudioContext | null>(null);
+  const play = useCallback((freqs = [440], dur = 0.09, type: OscillatorType = "sine") => {
     if (!enabled) return;
     try {
       if (!ctxRef.current) {
@@ -452,7 +457,7 @@ function useBeeper(enabled) {
    THEME TOKENS
    ========================================================================= */
 
-const THEME = {
+const THEME: Record<string, any> = {
   dark: {
     bg: "#14110D", surface: "#1D1912", surface2: "#241F16", border: "#332B1E",
     text: "#F3ECDD", textDim: "#B7A98D", gold: "#D9A64C", copper: "#C6672E",
@@ -483,19 +488,14 @@ function GlobalStyle() {
       @keyframes mlbPulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
       .mlb-ring { animation: mlbRing 1.6s ease-in-out infinite; }
       @keyframes mlbRing { 0%,100% { stroke-opacity: .35; r: 20;} 50% { stroke-opacity: 1; r: 24; } }
-      .mlb-shake { animation: mlbShake .4s; }
-      @keyframes mlbShake { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-3px)} 40%,60%{transform:translateX(3px)} }
       .mlb-scroll::-webkit-scrollbar { width: 6px; }
       .mlb-scroll::-webkit-scrollbar-thumb { background: var(--mlb-border); border-radius: 4px; }
       .mlb-focus:focus-visible { outline: 2px solid var(--mlb-gold); outline-offset: 2px; }
-      .mlb-confetti span { position:absolute; top:-10%; animation: mlbFall linear forwards; }
-      @keyframes mlbFall { to { transform: translateY(120vh) rotate(360deg); opacity: 0.2; } }
     `}</style>
   );
 }
 
-/* Isihlangu (war shield) crossed with an iklwa (stabbing spear) — the game's mark */
-function ShieldMark({ palette, size = 40 }) {
+function ShieldMark({ palette, size = 40 }: { palette: any; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
       <ellipse cx="20" cy="21" rx="11" ry="16" fill={palette.copper} stroke={palette.gold} strokeWidth="1.6" />
@@ -511,10 +511,9 @@ function ShieldMark({ palette, size = 40 }) {
   );
 }
 
-/* Shared pattern defs: a subtle leopard-rosette texture and a beadwork diamond strip */
-function PatternDefs({ palette }) {
+function PatternDefs({ palette }: { palette: any }) {
   const spot = "#2A160C";
-  const rosette = (cx, cy, r, key) => (
+  const rosette = (cx: number, cy: number, r: number, key: string) => (
     <g key={key} opacity="0.55">
       <ellipse cx={cx - r * 0.6} cy={cy - r * 0.3} rx={r * 0.5} ry={r * 0.35} fill={spot} />
       <ellipse cx={cx + r * 0.6} cy={cy - r * 0.2} rx={r * 0.45} ry={r * 0.3} fill={spot} />
@@ -538,23 +537,7 @@ function PatternDefs({ palette }) {
   );
 }
 
-function BeadDivider({ height = 7 }) {
-  return (
-    <svg width="100%" height={height} style={{ display: "block" }}>
-      <rect width="100%" height="100%" fill="url(#mlbBeads)" />
-    </svg>
-  );
-}
-
-function LeopardSwatch({ size = 12 }) {
-  return (
-    <svg width={size} height={size} style={{ borderRadius: 3, flexShrink: 0 }} aria-hidden="true">
-      <rect width={size} height={size} rx="3" fill="url(#mlbLeopard)" />
-    </svg>
-  );
-}
-
-function IconBtn({ icon: Icon, label, onClick, active = false, className = "" }) {
+function IconBtn({ icon: Icon, label, onClick, active = false, className = "" }: any) {
   return (
     <button
       aria-label={label}
@@ -570,7 +553,7 @@ function IconBtn({ icon: Icon, label, onClick, active = false, className = "" })
   );
 }
 
-function Avatar({ name, tone, size = 44 }) {
+function Avatar({ name, tone, size = 44 }: { name: string; tone: string; size?: number }) {
   const initials = name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div
@@ -587,35 +570,38 @@ function Avatar({ name, tone, size = 44 }) {
 }
 
 /* =========================================================================
-   BOARD
+   BOARD & PIECES
    ========================================================================= */
 
-const PIECE_STYLE_INFO = {
+const PIECE_STYLE_INFO: Record<string, { label: string; fillId: string | null }> = {
   isihlangu: { label: "Isihlangu", fillId: "shieldgrad" },
   inkomo: { label: "Inkomo", fillId: "inkomograd" },
   ucu: { label: "Ucu Ball", fillId: "ucugrad" },
-  leopard: { label: "Leopard", fillId: null }, // uses the leopard pattern directly
+  leopard: { label: "Leopard", fillId: null },
 };
-const AI_PIECE_STYLES = ["ucu", "leopard"];
 const ONLINE_PIECE_STYLES = ["isihlangu", "inkomo", "ucu", "leopard"];
 
-function pieceFill(style, defaultFill) {
+function pieceFill(style: string, defaultFill: string) {
   const info = PIECE_STYLE_INFO[style];
   if (!info) return defaultFill;
   if (style === "leopard") return "url(#mlbLeopard)";
   return `url(#${info.fillId})`;
 }
 
-function PieceTexture({ style, cx, cy, r }) {
+function PieceTexture({ style, cx, cy, r }: { style: string; cx: number; cy: number; r: number }) {
   if (style === "ucu") {
     const colors = ["#D9A64C", "#C6672E", "#2F7566", "#F3ECDD", "#8A5A34"];
     const count = 10;
-    return Array.from({ length: count }).map((_, i) => {
-      const angle = (i / count) * Math.PI * 2;
-      const bx = cx + Math.cos(angle) * r * 0.64;
-      const by = cy + Math.sin(angle) * r * 0.64;
-      return <circle key={i} cx={bx} cy={by} r={r * 0.16} fill={colors[i % colors.length]} stroke="#00000035" strokeWidth="0.7" />;
-    });
+    return (
+      <g>
+        {Array.from({ length: count }).map((_, i) => {
+          const angle = (i / count) * Math.PI * 2;
+          const bx = cx + Math.cos(angle) * r * 0.64;
+          const by = cy + Math.sin(angle) * r * 0.64;
+          return <circle key={i} cx={bx} cy={by} r={r * 0.16} fill={colors[i % colors.length]} stroke="#00000035" strokeWidth="0.7" />;
+        })}
+      </g>
+    );
   }
   if (style === "isihlangu") {
     return (
@@ -639,10 +625,10 @@ function PieceTexture({ style, cx, cy, r }) {
   return null;
 }
 
-function PieceStylePicker({ value, onChange, palette, options }) {
+function PieceStylePicker({ value, onChange, palette, options }: any) {
   return (
-    <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-      {options.map((id) => {
+    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((id: string) => {
         const info = PIECE_STYLE_INFO[id];
         return (
           <button
@@ -671,40 +657,9 @@ function PieceStylePicker({ value, onChange, palette, options }) {
   );
 }
 
-function BoardEngraving({ cx, cy, scale, flip, kind }) {
-  const s = flip ? -scale : scale;
-  if (kind === "antelope") {
-    return (
-      <g transform={`translate(${cx},${cy}) scale(${s},${scale})`} fill="#D8BE8A" opacity="0.4" pointerEvents="none">
-        <ellipse cx="0" cy="0" rx="20" ry="8.5" />
-        <rect x="-16" y="6" width="4.5" height="15" rx="1" />
-        <rect x="-7" y="6" width="4.5" height="15" rx="1" />
-        <rect x="3" y="6" width="4.5" height="15" rx="1" />
-        <rect x="12" y="6" width="4.5" height="15" rx="1" />
-        <path d="M 15,-5 Q 13,-12 18,-16 L 21,-13 Q 18,-10 19,-4 Z" />
-        <path d="M 18,-13 Q 20,-22 27,-27 L 29,-23 Q 24,-19 22,-10 Z" />
-        <path d="M 27,-25 Q 32,-32 30,-40 L 33,-38 Q 34,-30 29,-22 Z" />
-        <ellipse cx="22" cy="-2" rx="4" ry="3" />
-      </g>
-    );
-  }
-  return (
-    <g transform={`translate(${cx},${cy}) scale(${scale})`} fill="#D8BE8A" opacity="0.38" pointerEvents="none">
-      <ellipse cx="0" cy="0" rx="22" ry="10" />
-      <rect x="-18" y="7" width="5" height="16" rx="1.5" />
-      <rect x="-7" y="7" width="5" height="16" rx="1.5" />
-      <rect x="4" y="7" width="5" height="16" rx="1.5" />
-      <rect x="14" y="7" width="5" height="16" rx="1.5" />
-      <ellipse cx="24" cy="-3" rx="6" ry="4.5" />
-      <path d="M 21,-8 Q 16,-16 20,-20 L 23,-18 Q 21,-14 24,-9 Z" />
-      <path d="M 27,-8 Q 32,-16 28,-20 L 25,-18 Q 27,-14 24,-9 Z" />
-    </g>
-  );
-}
-
 function Board({
-  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false, opponentPieceStyle = null,
-}) {
+  state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", opponentPieceStyle = null, shouldUseCustomBoard = false,
+}: any) {
   const legalTargets = useMemo(() => {
     if (!interactive) return [];
     if (state.pendingCapture) return getCapturablePoints(state, state.currentPlayer);
@@ -718,24 +673,21 @@ function Board({
     return getMovablePieces(state, state.currentPlayer);
   }, [state, interactive]);
 
-  const p1Color = palette.copper;
-  const p2Color = palette.teal;
-  const pr = premium ? 21 : 18; // piece radius
+  const pr = 18;
 
   return (
     <svg viewBox="0 0 600 600" width="100%" height="100%" style={{ maxWidth: size, maxHeight: size }} role="img" aria-label="Mlabalaba board">
       <defs>
-        <radialGradient id="mlbWood" cx="50%" cy="35%" r="75%">
-          <stop offset="0%" stopColor={palette.woodLight} />
-          <stop offset="100%" stopColor={palette.wood} />
-        </radialGradient>
+        <clipPath id="boardClip">
+          <rect x="10" y="10" width="580" height="580" rx="26" />
+        </clipPath>
         <radialGradient id="p1grad" cx="35%" cy="30%" r="70%">
           <stop offset="0%" stopColor="#F0A46E" />
-          <stop offset="100%" stopColor={p1Color} />
+          <stop offset="100%" stopColor={palette.copper} />
         </radialGradient>
         <radialGradient id="p2grad" cx="35%" cy="30%" r="70%">
           <stop offset="0%" stopColor="#6FC9B3" />
-          <stop offset="100%" stopColor={p2Color} />
+          <stop offset="100%" stopColor={palette.teal} />
         </radialGradient>
         <radialGradient id="ucugrad" cx="35%" cy="30%" r="70%">
           <stop offset="0%" stopColor="#FFF8EA" /><stop offset="100%" stopColor="#E8D9B8" />
@@ -746,118 +698,110 @@ function Board({
         <radialGradient id="inkomograd" cx="35%" cy="30%" r="70%">
           <stop offset="0%" stopColor="#4A3B32" /><stop offset="100%" stopColor="#1C140F" />
         </radialGradient>
-        {premium && (
-          <>
-            <filter id="mlbHorn" x="-20%" y="-20%" width="140%" height="140%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.006 0.05" numOctaves="5" seed="24" result="noise" />
-              <feComponentTransfer in="noise" result="banded">
-                <feFuncA type="discrete" tableValues="0 0 0.1 0.22 0.42 0.65 0.85 0.65 0.42 0.22 0.1 0" />
-              </feComponentTransfer>
-              <feColorMatrix in="banded" type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.14  0 0 0 0 0.06  0 0 0 1 0" result="streaks" />
-              <feFlood floodColor="#0f0a06" result="darkBase" />
-              <feMerge>
-                <feMergeNode in="darkBase" />
-                <feMergeNode in="streaks" />
-              </feMerge>
-            </filter>
-            <radialGradient id="mlbVignette" cx="50%" cy="50%" r="72%">
-              <stop offset="45%" stopColor="#000000" stopOpacity="0" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.65" />
-            </radialGradient>
-          </>
-        )}
       </defs>
 
-      {!premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity="0.15" />}
-      {premium && (
-        <>
-          <rect x="10" y="10" width="580" height="580" rx="26" fill="#1c140e" filter="url(#mlbHorn)" />
-          <rect x="10" y="10" width="580" height="580" rx="26" fill="#000000" opacity="0.3" />
-          <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbVignette)" />
-          <BoardEngraving cx={85} cy={130} scale={1.5} flip={false} kind="antelope" />
-          <BoardEngraving cx={515} cy={130} scale={1.5} flip={true} kind="antelope" />
-          <BoardEngraving cx={85} cy={470} scale={1.4} flip={false} kind="cattle" />
-          <BoardEngraving cx={515} cy={470} scale={-1.4} flip={false} kind="cattle" />
-        </>
-      )}
-      <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />
-      <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />
-
-      {premium && ALL_EDGES.map(([a, b], idx) => (
-        <line
-          key={`groove-${idx}`}
-          x1={POINTS[a].x} y1={POINTS[a].y} x2={POINTS[b].x} y2={POINTS[b].y}
-          stroke="#00000060" strokeWidth="5.5" strokeLinecap="round"
+      {/* Conditional Playing Board Surface: Custom image ONLY for Online or Expert AI */}
+      {shouldUseCustomBoard ? (
+        <image
+          href={BOARD_IMAGE_URL}
+          x="10"
+          y="10"
+          width="580"
+          height="580"
+          preserveAspectRatio="xMidYMid slice"
+          clipPath="url(#boardClip)"
         />
-      ))}
+      ) : (
+        <rect x="10" y="10" width="580" height="580" rx="26" fill={palette.surface2} />
+      )}
+
+      {/* Outer Playing Board Frame Border */}
+      <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.gold} strokeWidth="3" opacity="0.8" />
+
+      {/* Board Grid Lines */}
       {ALL_EDGES.map(([a, b], idx) => (
         <line
           key={idx}
-          x1={POINTS[a].x} y1={POINTS[a].y} x2={POINTS[b].x} y2={POINTS[b].y}
-          stroke={palette.gold} strokeOpacity={premium ? 0.8 : 0.55} strokeWidth={premium ? 2.2 : 3} strokeLinecap="round"
+          x1={POINTS[a].x} y1={POINTS[a].y}
+          x2={POINTS[b].x} y2={POINTS[b].y}
+          stroke={palette.gold}
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          opacity="0.85"
         />
       ))}
 
-      {state.lastMillPoints.length > 0 &&
-        MILLS.filter((line) => line.every((i) => state.lastMillPoints.includes(i)) && line.every((i) => state.points[i]))
-          .map((line, li) => (
-            <polyline
-              key={li}
-              points={line.map((i) => `${POINTS[i].x},${POINTS[i].y}`).join(" ")}
-              fill="none" stroke={palette.gold} strokeWidth="6" strokeLinecap="round" opacity="0.85"
-            />
-          ))}
+      {/* Highlight Active Mill */}
+      {state.lastMillPoints.length > 0 && (
+        <circle
+          cx={POINTS[state.lastMillPoints[0]]?.x || 300}
+          cy={POINTS[state.lastMillPoints[0]]?.y || 300}
+          r="22"
+          fill="none"
+          stroke={palette.gold}
+          strokeWidth="3"
+          className="mlb-ring"
+        />
+      )}
 
+      {/* Board Points and Pieces */}
       {POINTS.map((pt, i) => {
-        const occ = state.points[i];
-        const isMine = occ === myRole;
+        const piece = state.points[i];
+        const isLegal = showLegalHints && legalTargets.includes(i);
         const isSelected = state.selected === i;
-        const isLegal = legalTargets.includes(i);
-        const isSelectable = selectablePieces.includes(i);
-        const isLastMoved = state.lastMoved && (state.lastMoved.to === i || state.lastMoved.from === i);
-        const baseFill = occ === "P1" ? "url(#p1grad)" : "url(#p2grad)";
+        const isSelectable = showLegalHints && selectablePieces.includes(i);
+        const isLastMoved = state.lastMoved?.to === i || state.lastMoved?.from === i;
+
+        const effectiveStyle = (p: string) => {
+          if (p === myRole) return pieceStyle;
+          return opponentPieceStyle || pieceStyle;
+        };
+
         return (
-          <g key={i}>
-            <circle
-              cx={pt.x} cy={pt.y} r={pr - 2}
-              fill="transparent"
-              onClick={() => interactive && onPointClick(i)}
-              className={interactive && (isLegal || isSelectable) ? "cursor-pointer" : ""}
-              style={{ pointerEvents: interactive ? "all" : "none" }}
-            />
-            {premium && (
-              <>
-                <circle cx={pt.x} cy={pt.y} r={pr + 5} fill="none" stroke="#1c140e" strokeWidth="4" pointerEvents="none" />
-                <circle cx={pt.x} cy={pt.y} r={pr + 5} fill="none" stroke="#E8C468" strokeWidth="2.6" pointerEvents="none" />
-              </>
+          <g
+            key={i}
+            onClick={() => interactive && onPointClick(i)}
+            style={{ cursor: interactive && (isLegal || isSelectable || piece) ? "pointer" : "default" }}
+            tabIndex={interactive ? 0 : -1}
+            role="button"
+            aria-label={`Point ${i + 1}${piece ? `, occupied by ${piece}` : ""}`}
+            onKeyDown={(e) => {
+              if (interactive && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onPointClick(i);
+              }
+            }}
+          >
+            <circle cx={pt.x} cy={pt.y} r="10" fill={palette.border} opacity="0.75" />
+
+            {isLegal && (
+              <circle
+                cx={pt.x} cy={pt.y} r={pr + 4}
+                fill={state.pendingCapture ? palette.copper : palette.gold}
+                opacity={state.pendingCapture ? 0.45 : 0.5}
+                className="mlb-pulse"
+              />
             )}
-            {!occ && (
-              <circle cx={pt.x} cy={pt.y} r="7" fill={palette.border} opacity="0.8" pointerEvents="none" />
-            )}
-            {isLegal && !occ && (
-              <circle cx={pt.x} cy={pt.y} r="13" fill={palette.gold} opacity="0.35" className="mlb-pulse" pointerEvents="none" />
-            )}
-            {isLegal && occ && (
-              <circle cx={pt.x} cy={pt.y} r={pr + 4} fill="none" stroke="#E15A3C" strokeWidth="3" className="mlb-pulse" pointerEvents="none" />
-            )}
-            {occ && (
-              <g className={isLastMoved ? "mlb-pop" : ""} pointerEvents="none">
-                <circle cx={pt.x} cy={pt.y} r={pr + 1} fill="#00000055" transform="translate(0,2)" />
+
+            {piece && (
+              <g className="mlb-pop">
+                <circle cx={pt.x} cy={pt.y + 3} r={pr} fill="#000000" opacity="0.45" />
                 <circle
                   cx={pt.x} cy={pt.y} r={pr}
-                  fill={isMine ? pieceFill(pieceStyle, baseFill) : (opponentPieceStyle ? pieceFill(opponentPieceStyle, baseFill) : baseFill)}
-                  stroke={isSelected ? palette.gold : "#00000033"}
-                  strokeWidth={isSelected ? 4 : 1.5}
+                  fill={pieceFill(effectiveStyle(piece), piece === "P1" ? "url(#p1grad)" : "url(#p2grad)")}
+                  stroke={isSelected ? palette.gold : "#00000077"}
+                  strokeWidth={isSelected ? "3.5" : "1.5"}
                 />
-                {isMine && <PieceTexture style={pieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
-                {!isMine && opponentPieceStyle && <PieceTexture style={opponentPieceStyle} cx={pt.x} cy={pt.y} r={pr} />}
-                {premium && (
-                  <ellipse cx={pt.x - pr * 0.3} cy={pt.y - pr * 0.35} rx={pr * 0.22} ry={pr * 0.14} fill="#ffffff" opacity={occ === "P1" ? 0.55 : 0.3} />
-                )}
-                {isSelectable && (
-                  <circle cx={pt.x} cy={pt.y} r={pr + 6} fill="none" stroke={palette.gold} strokeWidth="2.5" className="mlb-ring" />
-                )}
+                <PieceTexture style={effectiveStyle(piece)} cx={pt.x} cy={pt.y} r={pr} />
               </g>
+            )}
+
+            {isSelectable && !isSelected && (
+              <circle cx={pt.x} cy={pt.y} r={pr + 3} fill="none" stroke={palette.gold} strokeWidth="2" strokeDasharray="3 3" />
+            )}
+
+            {isLastMoved && !piece && (
+              <circle cx={pt.x} cy={pt.y} r="6" fill={palette.gold} opacity="0.7" />
             )}
           </g>
         );
@@ -867,511 +811,131 @@ function Board({
 }
 
 /* =========================================================================
-   PLAYER CARD
+   COMPONENTS
    ========================================================================= */
 
-function PlayerCard({ side, name, avatarTone, isTurn, state, profile, mirrored = false }) {
-  const remaining = onBoardCount(state, side) + (PIECES_PER_PLAYER - state.placedCount[side]);
-  const captured = state.capturedBy[side];
+function PlayerCard({ name, role, active, state, palette, pieceStyle }: any) {
+  const unplaced = PIECES_PER_PLAYER - state.placedCount[role];
+  const onBoard = onBoardCount(state, role);
+
   return (
     <div
-      className={`mlb-fade-in rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden transition-all ${isTurn ? "mlb-pop" : ""}`}
+      className={`rounded-2xl p-4 transition-all border ${active ? "scale-[1.02]" : "opacity-80"}`}
       style={{
-        background: "var(--mlb-surface)",
-        border: `1.5px solid ${isTurn ? avatarTone : "var(--mlb-border)"}`,
-        boxShadow: isTurn ? `0 0 0 3px ${avatarTone}33` : "none",
+        background: active ? "var(--mlb-surface)" : "var(--mlb-surface2)",
+        borderColor: active ? (role === "P1" ? palette.copper : palette.teal) : "var(--mlb-border)",
+        boxShadow: active ? `0 4px 20px ${role === "P1" ? palette.copper : palette.teal}22` : "none",
       }}
     >
-      <div className={`flex items-center gap-3 ${mirrored ? "flex-row-reverse text-right" : ""}`}>
-        <Avatar name={name} tone={avatarTone} />
+      <div className="flex items-center gap-3 mb-3">
+        <Avatar name={name} tone={role === "P1" ? palette.copper : palette.teal} size={40} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2" style={{ flexDirection: mirrored ? "row-reverse" : "row" }}>
-            <p className="font-bold truncate" style={{ color: "var(--mlb-text)" }}>{name}</p>
-            {isTurn && <span className="text-[10px] px-2 py-0.5 rounded-full font-bold mlb-pulse" style={{ background: avatarTone, color: "#181310" }}>TURN</span>}
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-sm truncate" style={{ color: "var(--mlb-text)" }}>{name}</h3>
+            {active && <span className="w-2 h-2 rounded-full mlb-pulse" style={{ background: role === "P1" ? palette.copper : palette.teal }} />}
           </div>
-          <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>{profile.rank} · Lvl {profile.level}</p>
+          <p className="text-xs font-semibold opacity-70" style={{ color: "var(--mlb-textDim)" }}>
+            {state.phase === "placement" ? `${unplaced} to place` : `${onBoard} on board`}
+          </p>
         </div>
       </div>
 
-      <div className={`grid grid-cols-3 gap-2 text-center`}>
-        <Stat label="On board" value={onBoardCount(state, side)} />
-        <Stat label="Captured" value={captured.length} />
-        <Stat label="Mills" value={state.millsFormed[side]} />
-      </div>
-
-      <div>
-        <p className="text-[11px] uppercase tracking-wide mb-1" style={{ color: "var(--mlb-textDim)" }}>Captured pieces</p>
-        <div className={`flex flex-wrap gap-1.5 min-h-[22px] ${mirrored ? "justify-end" : ""}`}>
-          {captured.length === 0 && <span className="text-xs italic" style={{ color: "var(--mlb-textDim)" }}>None yet</span>}
-          {captured.map((c, idx) => (
-            <span
-              key={idx}
-              className="w-4 h-4 rounded-full mlb-pop"
-              style={{ background: c === "P1" ? "var(--mlb-copper)" : "var(--mlb-teal)", boxShadow: "0 0 0 1px #00000033" }}
-            />
-          ))}
+      <div className="grid grid-cols-2 gap-2 text-center text-xs">
+        <div className="rounded-xl p-2" style={{ background: "var(--mlb-bg)" }}>
+          <span className="block text-[10px] uppercase font-bold opacity-60" style={{ color: "var(--mlb-textDim)" }}>Lost</span>
+          <span className="font-extrabold text-sm" style={{ color: "var(--mlb-text)" }}>{state.capturedCount[role]}</span>
         </div>
-      </div>
-
-      <div className={`flex justify-between text-xs pt-2 border-t ${mirrored ? "flex-row-reverse" : ""}`} style={{ borderColor: "var(--mlb-border)" }}>
-        <span style={{ color: "var(--mlb-textDim)" }}>W {profile.wins} · L {profile.losses}</span>
-        <span style={{ color: "var(--mlb-textDim)" }}>{profile.winPct}% win rate</span>
+        <div className="rounded-xl p-2" style={{ background: "var(--mlb-bg)" }}>
+          <span className="block text-[10px] uppercase font-bold opacity-60" style={{ color: "var(--mlb-textDim)" }}>Mills</span>
+          <span className="font-extrabold text-sm" style={{ color: palette.gold }}>{state.millsFormed[role]}</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }) {
+function StatusBanner({ state, palette, myRole }: any) {
+  if (state.gameOver) {
+    return (
+      <div className="rounded-xl p-3 text-center font-bold text-sm mlb-pop" style={{ background: palette.gold, color: "#1a1a1a" }}>
+        🏆 Game Over! {state.gameOver.winner === "P1" ? "Player 1" : "Player 2"} wins by {state.gameOver.reason}!
+      </div>
+    );
+  }
+
+  if (state.pendingCapture) {
+    const isMe = state.currentPlayer === myRole;
+    return (
+      <div className="rounded-xl p-3 text-center font-bold text-sm mlb-pulse" style={{ background: palette.copper, color: "#ffffff" }}>
+        ⚡ {isMe ? "You formed a mill! Select an opponent's piece to capture." : "Opponent formed a mill and is capturing!"}
+      </div>
+    );
+  }
+
+  const isMyTurn = state.currentPlayer === myRole;
   return (
-    <div className="rounded-lg py-1.5" style={{ background: "var(--mlb-surface2)" }}>
-      <p className="font-bold text-lg leading-none" style={{ color: "var(--mlb-text)" }}>{value}</p>
-      <p className="text-[10px] mt-1" style={{ color: "var(--mlb-textDim)" }}>{label}</p>
+    <div className="rounded-xl p-3 text-center font-bold text-sm" style={{ background: "var(--mlb-surface2)", color: "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}>
+      {isMyTurn ? (
+        state.phase === "placement" ? "Your turn: Place a piece on any open point" : "Your turn: Select a piece to move"
+      ) : (
+        "Waiting for opponent..."
+      )}
     </div>
   );
 }
 
-/* =========================================================================
-   MOVE HISTORY
-   ========================================================================= */
-
-function ChatPanel({ messages, myRole, onSend }) {
-  const [draft, setDraft] = useState("");
-  const scrollRef = useRef(null);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages.length]);
-
-  const submit = () => {
-    if (!draft.trim()) return;
-    onSend(draft);
-    setDraft("");
-  };
+function MoveHistory({ history, palette }: any) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [history]);
 
   return (
-    <div className="rounded-2xl p-3 flex flex-col" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-      <p className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: "var(--mlb-textDim)" }}>Chat</p>
-      <div ref={scrollRef} className="flex flex-col gap-1.5 max-h-40 overflow-y-auto mlb-scroll pr-1 mb-2">
-        {messages.length === 0 && <p className="text-xs italic px-1" style={{ color: "var(--mlb-textDim)" }}>Say hello, or ask about a rematch once the game ends.</p>}
-        {messages.map((m, i) => {
-          const mine = m.role === myRole;
-          return (
-            <div key={i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <span
-                className="text-xs px-2.5 py-1.5 rounded-xl max-w-[80%] break-words"
-                style={{
-                  background: mine ? "var(--mlb-gold)" : "var(--mlb-surface2)",
-                  color: mine ? "#181310" : "var(--mlb-text)",
-                }}
-              >
-                {m.text}
+    <div className="rounded-2xl p-4 flex flex-col h-48 border" style={{ background: "var(--mlb-surface)", borderColor: "var(--mlb-border)" }}>
+      <h4 className="font-bold text-xs uppercase tracking-wider mb-2 opacity-70" style={{ color: "var(--mlb-textDim)" }}>Move History</h4>
+      <div className="flex-1 overflow-y-auto mlb-scroll space-y-1.5 pr-1">
+        {history.length === 0 ? (
+          <p className="text-xs italic opacity-50" style={{ color: "var(--mlb-textDim)" }}>No moves yet</p>
+        ) : (
+          history.map((m: any, idx: number) => (
+            <div key={idx} className="text-xs flex items-center justify-between py-1 border-b opacity-90" style={{ borderColor: "var(--mlb-border)" }}>
+              <span className="font-semibold opacity-60">#{m.n}</span>
+              <span className="font-medium" style={{ color: m.player === "P1" ? palette.copper : palette.teal }}>
+                {m.player}: {m.text}
               </span>
             </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-          maxLength={200}
-          placeholder="Type a message…"
-          aria-label="Chat message"
-          className="mlb-focus flex-1 rounded-lg px-3 py-1.5 text-xs"
-          style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}
-        />
-        <button onClick={submit} className="mlb-focus rounded-lg px-3 py-1.5 text-xs font-bold" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
-          Send
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MoveHistory({ history }) {
-  return (
-    <div className="rounded-2xl p-3 flex flex-col" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-      <p className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: "var(--mlb-textDim)" }}>Move history</p>
-      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto mlb-scroll pr-1">
-        {history.length === 0 && <p className="text-xs italic px-1" style={{ color: "var(--mlb-textDim)" }}>No moves yet.</p>}
-        {history.map((m) => (
-          <div key={m.n} className="text-xs px-2 py-1 rounded-lg flex gap-2" style={{ background: "var(--mlb-surface2)" }}>
-            <span className="font-bold w-5 shrink-0" style={{ color: "var(--mlb-textDim)" }}>{m.n}.</span>
-            <span style={{ color: "var(--mlb-text)" }}>
-              <b style={{ color: m.player === "P1" ? "var(--mlb-copper)" : "var(--mlb-teal)" }}>{m.player === "P1" ? "P1" : "P2"}</b> {m.text}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================================
-   GAME BANNER / STATUS
-   ========================================================================= */
-
-function StatusBanner({ state, names }) {
-  let text, tone;
-  if (state.gameOver) {
-    text = `${names[state.gameOver.winner]} wins!`;
-    tone = "var(--mlb-gold)";
-  } else if (state.pendingCapture) {
-    text = `${names[state.currentPlayer]} formed a mill — choose a piece to capture`;
-    tone = "#E15A3C";
-  } else if (state.phase === "placement") {
-    text = `${names[state.currentPlayer]}'s turn — place a piece (${state.placedCount[state.currentPlayer]}/${PIECES_PER_PLAYER})`;
-    tone = state.currentPlayer === "P1" ? "var(--mlb-copper)" : "var(--mlb-teal)";
-  } else {
-    const flying = isFlying(state, state.currentPlayer);
-    text = `${names[state.currentPlayer]}'s turn — ${flying ? "fly to any open point" : "move a piece"}`;
-    tone = state.currentPlayer === "P1" ? "var(--mlb-copper)" : "var(--mlb-teal)";
-  }
-  return (
-    <div className="mlb-fade-in rounded-xl px-4 py-2.5 text-center font-semibold text-sm" style={{ background: "var(--mlb-surface2)", color: tone, border: `1px solid ${tone}55` }}>
-      {text}
-    </div>
-  );
-}
-
-/* =========================================================================
-   RESULTS MODAL
-   ========================================================================= */
-
-function Confetti() {
-  const pieces = useMemo(() => Array.from({ length: 40 }, (_, i) => ({
-    left: Math.random() * 100,
-    delay: Math.random() * 0.6,
-    dur: 2 + Math.random() * 1.5,
-    color: [ "#D9A64C", "#C6672E", "#2F7566", "#F0A46E" ][i % 4],
-    size: 6 + Math.random() * 6,
-  })), []);
-  return (
-    <div className="mlb-confetti absolute inset-0 overflow-hidden pointer-events-none">
-      {pieces.map((p, i) => (
-        <span key={i} style={{ left: `${p.left}%`, animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s`, width: p.size, height: p.size, background: p.color, borderRadius: 2 }} />
-      ))}
-    </div>
-  );
-}
-
-function ResultsModal({ state, names, onRematch, onLobby, matchSeconds, isOnline, chatProps }) {
-  if (!state.gameOver) return null;
-  const winner = state.gameOver.winner;
-  const loser = OPP(winner);
-  const mins = Math.floor(matchSeconds / 60), secs = matchSeconds % 60;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#000000aa" }}>
-      <div className="relative mlb-pop rounded-3xl p-6 sm:p-8 w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto mlb-scroll" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-        <svg className="absolute inset-x-0 top-0" width="100%" height="10" style={{ display: "block" }} aria-hidden="true">
-          <rect width="100%" height="100%" fill="url(#mlbLeopard)" />
-        </svg>
-        <Confetti />
-        <div className="relative text-center">
-          <Crown className="mx-auto mb-2" size={40} style={{ color: "var(--mlb-gold)" }} />
-          <h2 className="mlb-display text-3xl" style={{ color: "var(--mlb-text)" }}>{names[winner]} wins</h2>
-          <p className="text-sm mt-1" style={{ color: "var(--mlb-textDim)" }}>
-            {state.gameOver.reason === "blocked" ? `${names[loser]} had no legal moves` : `${names[loser]} fell below 3 pieces`}
-          </p>
-        </div>
-        <div className="relative grid grid-cols-2 gap-3 mt-6">
-          <ResultCol label={names.P1} color="var(--mlb-copper)" state={state} side="P1" />
-          <ResultCol label={names.P2} color="var(--mlb-teal)" state={state} side="P2" />
-        </div>
-        <div className="relative flex justify-around mt-4 text-xs" style={{ color: "var(--mlb-textDim)" }}>
-          <span>Moves: {state.moveHistory.length}</span>
-          <span className="flex items-center gap-1"><Clock size={12} /> {mins}:{secs.toString().padStart(2, "0")}</span>
-        </div>
-        {isOnline && chatProps && (
-          <div className="relative mt-5">
-            <p className="text-xs font-bold mb-1.5" style={{ color: "var(--mlb-textDim)" }}>Want a rematch? Say so here:</p>
-            <ChatPanel {...chatProps} />
-          </div>
+          ))
         )}
-        <div className="relative flex gap-3 mt-6">
-          <button onClick={onRematch} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
-            <RotateCcw size={16} /> Rematch
-          </button>
-          <button onClick={onLobby} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold" style={{ background: "var(--mlb-surface2)", color: "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}>
-            Lobby
-          </button>
-        </div>
+        <div ref={endRef} />
       </div>
     </div>
   );
 }
 
-function ResultCol({ label, color, state, side }) {
+function RulesModal({ onClose, palette }: any) {
   return (
-    <div className="rounded-xl p-3" style={{ background: "var(--mlb-surface2)" }}>
-      <p className="text-xs font-bold mb-2" style={{ color }}>{label}</p>
-      <div className="flex flex-col gap-1 text-xs" style={{ color: "var(--mlb-text)" }}>
-        <span>Remaining: {onBoardCount(state, side)}</span>
-        <span>Captured: {state.capturedBy[side].length}</span>
-        <span>Mills: {state.millsFormed[side]}</span>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================================
-   TUTORIAL
-   ========================================================================= */
-
-function demoBoard(occupied) {
-  const s = createInitialState();
-  occupied.forEach(([i, p]) => (s.points[i] = p));
-  return s;
-}
-
-const TUTORIAL_STEPS = [
-  {
-    title: "What is Mlabalaba?",
-    body: "Mlabalaba is a two-player strategy game of placement, movement, and capture, played on a board of 24 connected points. Each side controls 12 pieces. Your goal: reduce your opponent to fewer than 3 pieces, or trap them so they cannot move.",
-    board: () => demoBoard([]),
-  },
-  {
-    title: "The board",
-    body: "The board has three nested squares — outer, middle, and inner — joined by connector and diagonal lines. Every line segment is a path a piece can travel along, and every dot where lines meet is a point a piece can occupy.",
-    board: () => demoBoard([]),
-  },
-  {
-    title: "Placement phase",
-    body: "The game opens with the placement phase. Players alternate placing one piece on any empty point until both sides have placed all 12 pieces. Choose points that give you future mobility and mill potential.",
-    board: () => demoBoard([[1, "P1"], [9, "P2"], [17, "P1"]]),
-  },
-  {
-    title: "Movement phase",
-    body: "Once all pieces are placed, the movement phase begins. On your turn, slide one piece along a line to an empty neighbouring point. Select a piece to see its legal destinations highlighted in gold.",
-    board: () => demoBoard([[1, "P1"], [0, "P1"], [2, "P2"], [9, "P2"]]),
-  },
-  {
-    title: "Forming a mill",
-    body: "A mill is three of your pieces in a row along any drawn line. Completing a mill — during placement or movement — immediately earns you a capture. Watch the gold highlight when three fall into line.",
-    board: () => demoBoard([[0, "P1"], [1, "P1"], [2, "P1"], [8, "P2"]]),
-  },
-  {
-    title: "Capturing",
-    body: "After forming a mill, remove one opposing piece from the board. You cannot take a piece that's part of an opponent's own mill unless every one of their pieces is currently in a mill.",
-    board: () => demoBoard([[0, "P1"], [1, "P1"], [2, "P1"], [7, "P2"], [15, "P2"]]),
-  },
-  {
-    title: "Winning the game",
-    body: "You win by reducing your opponent to fewer than 3 pieces on the board, or by leaving them with no legal move on their turn. If a player has exactly 3 pieces left, that player may 'fly' — moving to any empty point, not just an adjacent one.",
-    board: () => demoBoard([[16, "P1"], [17, "P1"], [18, "P1"], [0, "P2"], [1, "P2"]]),
-  },
-  {
-    title: "Strategy tips",
-    body: "Favour points with more connections — cross and corner points touch three or four lines. Avoid completing a mill too early if you can instead threaten two mills at once ('a double mill' or swinging mill), forcing your opponent into a losing trade.",
-    board: () => demoBoard([[9, "P1"], [11, "P1"], [13, "P1"], [17, "P1"], [19, "P2"], [21, "P2"]]),
-  },
-];
-
-function TutorialView({ palette, onBack }) {
-  const [step, setStep] = useState(0);
-  const t = TUTORIAL_STEPS[step];
-  const board = useMemo(() => t.board(), [step]);
-  return (
-    <div className="mlb-fade-in max-w-4xl mx-auto w-full flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <IconBtn icon={ArrowLeft} label="Back to lobby" onClick={onBack} />
-        <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>Learn Mlabalaba</h2>
-      </div>
-      <div className="grid sm:grid-cols-2 gap-5 rounded-2xl p-5" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-        <div className="flex items-center justify-center">
-          <Board state={board} onPointClick={() => {}} interactive={false} palette={palette} size={320} />
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 mlb-fade-in">
+      <div className="rounded-3xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto mlb-scroll border relative" style={{ background: "var(--mlb-surface)", borderColor: "var(--mlb-border)", color: "var(--mlb-text)" }}>
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/10"><X size={20} /></button>
+        <div className="flex items-center gap-3 mb-4">
+          <ShieldMark palette={palette} size={36} />
+          <h2 className="text-2xl font-bold mlb-display">How to Play Mlabalaba</h2>
         </div>
-        <div className="flex flex-col justify-between">
+        <div className="space-y-4 text-sm leading-relaxed opacity-90">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--mlb-gold)" }}>Step {step + 1} of {TUTORIAL_STEPS.length}</p>
-            <h3 className="mlb-display text-2xl mt-1" style={{ color: "var(--mlb-text)" }}>{t.title}</h3>
-            <p className="text-sm mt-3 leading-relaxed" style={{ color: "var(--mlb-textDim)" }}>{t.body}</p>
+            <h3 className="font-bold text-base mb-1" style={{ color: palette.gold }}>1. Placement Phase</h3>
+            <p>Players take turns placing their 12 pieces on open intersections. Forming 3 pieces in a straight line creates a <strong>Mill</strong>, allowing you to capture an opponent's piece.</p>
           </div>
-          <div className="flex gap-2 mt-6">
-            <button
-              disabled={step === 0}
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              className="mlb-focus flex-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-1 disabled:opacity-30"
-              style={{ background: "var(--mlb-surface2)", color: "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}
-            >
-              <ChevronLeft size={16} /> Back
-            </button>
-            <button
-              disabled={step === TUTORIAL_STEPS.length - 1}
-              onClick={() => setStep((s) => Math.min(TUTORIAL_STEPS.length - 1, s + 1))}
-              className="mlb-focus flex-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-1 disabled:opacity-30"
-              style={{ background: "var(--mlb-gold)", color: "#181310" }}
-            >
-              Next <ChevronRight size={16} />
-            </button>
+          <div>
+            <h3 className="font-bold text-base mb-1" style={{ color: palette.gold }}>2. Movement Phase</h3>
+            <p>Once all pieces are placed, take turns moving pieces along lines to adjacent open spots. Forming new mills allows further captures.</p>
           </div>
-        </div>
-      </div>
-      <div className="flex gap-1.5 justify-center flex-wrap">
-        {TUTORIAL_STEPS.map((_, i) => (
-          <button key={i} aria-label={`Go to step ${i + 1}`} onClick={() => setStep(i)}
-            className="mlb-focus w-2.5 h-2.5 rounded-full transition-all"
-            style={{ background: i === step ? "var(--mlb-gold)" : "var(--mlb-border)" }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================================
-   ONLINE PANEL (honest placeholder — no fake connection)
-   ========================================================================= */
-
-function OnlinePanel({ palette, onBack, onEnterRoom }) {
-  const [tab, setTab] = useState("create"); // create | join
-  const [joinCode, setJoinCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [pieceStyle, setPieceStyle] = useState("ucu");
-
-  if (!isSupabaseConfigured) {
-    return (
-      <div className="mlb-fade-in max-w-2xl mx-auto w-full flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <IconBtn icon={ArrowLeft} label="Back to lobby" onClick={onBack} />
-          <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>Online multiplayer</h2>
-        </div>
-        <div className="rounded-2xl p-5 flex flex-col gap-4" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-          <div className="flex items-center gap-2" style={{ color: "#E15A3C" }}>
-            <WifiOff size={18} />
-            <p className="font-bold text-sm">No Supabase project connected yet</p>
+          <div>
+            <h3 className="font-bold text-base mb-1" style={{ color: palette.gold }}>3. Flying Phase</h3>
+            <p>When reduced to just 3 pieces, a player gains the ability to "fly" to <em>any</em> open point on the board!</p>
           </div>
-          <p className="text-sm leading-relaxed" style={{ color: "var(--mlb-textDim)" }}>
-            The room-creation and syncing code is wired up and ready — it just needs your Supabase project's URL
-            and anon key in a <code>.env</code> file (<code>VITE_SUPABASE_URL</code> and{" "}
-            <code>VITE_SUPABASE_ANON_KEY</code>). See <code>ONLINE_SETUP.md</code> for the exact steps, then restart
-            <code> npm run dev</code>.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleCreate = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const code = await createRoom(createInitialState());
-      onEnterRoom(code, "P1", pieceStyle);
-    } catch (e) {
-      setError(e.message || "Could not create a room. Check your Supabase setup.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleJoin = async () => {
-    if (joinCode.trim().length < 4) { setError("Enter the 5-character room code."); return; }
-    setBusy(true);
-    setError("");
-    try {
-      await joinRoom(joinCode.trim().toUpperCase());
-      onEnterRoom(joinCode.trim().toUpperCase(), "P2", pieceStyle);
-    } catch (e) {
-      setError(e.message || "Could not join that room.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mlb-fade-in max-w-2xl mx-auto w-full flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <IconBtn icon={ArrowLeft} label="Back to lobby" onClick={onBack} />
-        <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>Online multiplayer</h2>
-      </div>
-      <div className="rounded-2xl p-5 flex flex-col gap-4" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-        <div className="flex items-center gap-2" style={{ color: "var(--mlb-teal)" }}>
-          <Wifi size={18} />
-          <p className="font-bold text-sm">Connected to your Supabase project</p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--mlb-textDim)" }}>Your piece style</p>
-          <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={ONLINE_PIECE_STYLES} />
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={() => { setTab("create"); setError(""); }} className="mlb-focus flex-1 rounded-xl py-2 font-bold text-sm"
-            style={{ background: tab === "create" ? "var(--mlb-gold)" : "var(--mlb-surface2)", color: tab === "create" ? "#181310" : "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}>
-            Create game
-          </button>
-          <button onClick={() => { setTab("join"); setError(""); }} className="mlb-focus flex-1 rounded-xl py-2 font-bold text-sm"
-            style={{ background: tab === "join" ? "var(--mlb-gold)" : "var(--mlb-surface2)", color: tab === "join" ? "#181310" : "var(--mlb-text)", border: "1px solid var(--mlb-border)" }}>
-            Join with code
-          </button>
-        </div>
-
-        {tab === "create" && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>
-              You'll play as Player 1. A 5-character room code will be generated — share it with your opponent.
-            </p>
-            <button onClick={handleCreate} disabled={busy} className="mlb-focus rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />} Create room
-            </button>
+          <div>
+            <h3 className="font-bold text-base mb-1" style={{ color: palette.gold }}>Winning</h3>
+            <p>Reduce your opponent to fewer than 3 pieces or block all their possible legal moves to claim victory!</p>
           </div>
-        )}
-
-        {tab === "join" && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>Enter the room code your opponent shared with you.</p>
-            <input
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              maxLength={5}
-              placeholder="e.g. K7QRT"
-              className="mlb-focus rounded-xl px-3 py-2.5 font-mono tracking-widest text-lg text-center"
-              style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}
-            />
-            <button onClick={handleJoin} disabled={busy} className="mlb-focus rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <Wifi size={16} />} Join room
-            </button>
-          </div>
-        )}
-
-        {error && (
-          <p className="text-xs rounded-lg px-3 py-2 mlb-fade-in" style={{ background: "var(--mlb-surface2)", color: "#E15A3C" }}>{error}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================================
-   STATS VIEW
-   ========================================================================= */
-
-function StatsView({ stats, palette, onBack }) {
-  const winPct = stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
-  return (
-    <div className="mlb-fade-in max-w-3xl mx-auto w-full flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <IconBtn icon={ArrowLeft} label="Back to lobby" onClick={onBack} />
-        <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>Your statistics</h2>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Stat label="Games played" value={stats.gamesPlayed} />
-        <Stat label="Win rate" value={`${winPct}%`} />
-        <Stat label="Pieces captured" value={stats.piecesCaptured} />
-        <Stat label="Mills formed" value={stats.millsFormed} />
-        <Stat label="Games won" value={stats.gamesWon} />
-        <Stat label="Games lost" value={stats.gamesLost} />
-        <Stat label="Current streak" value={stats.currentStreak} />
-        <Stat label="Best streak" value={stats.bestStreak} />
-      </div>
-      <div className="rounded-2xl p-4" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-        <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "var(--mlb-textDim)" }}>Recent matches</p>
-        {stats.recent.length === 0 && <p className="text-sm italic" style={{ color: "var(--mlb-textDim)" }}>Play a game to see your history here.</p>}
-        <div className="flex flex-col gap-1.5">
-          {stats.recent.map((r, i) => (
-            <div key={i} className="flex justify-between text-sm rounded-lg px-3 py-2" style={{ background: "var(--mlb-surface2)" }}>
-              <span style={{ color: r.result === "Win" ? "var(--mlb-gold)" : "var(--mlb-textDim)" }}>{r.result} vs {r.opponent}</span>
-              <span style={{ color: "var(--mlb-textDim)" }}>{r.moves} moves</span>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -1379,425 +943,294 @@ function StatsView({ stats, palette, onBack }) {
 }
 
 /* =========================================================================
-   LOBBY
-   ========================================================================= */
-
-function ModeCard({ icon: Icon, title, desc, onClick, accent }) {
-  return (
-    <button
-      onClick={onClick}
-      className="mlb-focus mlb-fade-in text-left rounded-2xl p-5 flex flex-col gap-3 transition-transform hover:-translate-y-0.5"
-      style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}
-    >
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${accent}22`, color: accent }}>
-        <Icon size={20} />
-      </div>
-      <div>
-        <p className="font-bold" style={{ color: "var(--mlb-text)" }}>{title}</p>
-        <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--mlb-textDim)" }}>{desc}</p>
-      </div>
-    </button>
-  );
-}
-
-function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline }) {
-  const [difficulty, setDifficulty] = useState("intermediate");
-  const [pieceStyle, setPieceStyle] = useState("ucu");
-  const canPickPiece = difficulty === "advanced" || difficulty === "expert";
-  const winPct = stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
-  return (
-    <div className="mlb-fade-in max-w-5xl mx-auto w-full flex flex-col gap-8">
-      <div className="text-center flex flex-col items-center gap-2 pt-4">
-        <div className="flex items-center gap-3">
-          <ShieldMark palette={palette} size={40} />
-          <h1 className="mlb-display text-5xl tracking-wide" style={{ color: "var(--mlb-text)" }}>MLABALABA</h1>
-        </div>
-        <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>A modern take on the classic Southern African mill game</p>
-      </div>
-
-      <div className="rounded-2xl p-4 flex flex-wrap items-center justify-center gap-6" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-        <div className="flex items-center gap-2"><Avatar name="You" tone={palette.copper} size={36} /><span className="text-sm font-semibold" style={{ color: "var(--mlb-text)" }}>You</span></div>
-        <Divider /><span className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Games <b style={{ color: "var(--mlb-text)" }}>{stats.gamesPlayed}</b></span>
-        <Divider /><span className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Win rate <b style={{ color: "var(--mlb-text)" }}>{winPct}%</b></span>
-        <Divider /><span className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Streak <b style={{ color: "var(--mlb-text)" }}>{stats.currentStreak}</b></span>
-        <Divider />
-        <button onClick={onStats} className="mlb-focus text-xs font-bold underline" style={{ color: "var(--mlb-gold)" }}>View full stats</button>
-      </div>
-
-      <div>
-        <p className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: "var(--mlb-textDim)" }}>Play</p>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl p-5 flex flex-col gap-3" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${palette.gold}22`, color: palette.gold }}><Bot size={20} /></div>
-            <p className="font-bold" style={{ color: "var(--mlb-text)" }}>Play vs Computer</p>
-            <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Choose a difficulty, then start.</p>
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              {["beginner", "intermediate", "advanced", "expert"].map((d) => (
-                <button key={d} onClick={() => setDifficulty(d)}
-                  className="mlb-focus text-xs font-bold rounded-lg py-2 capitalize transition-all flex items-center justify-center gap-1.5"
-                  style={{
-                    background: difficulty === d ? palette.gold : "var(--mlb-surface2)",
-                    color: difficulty === d ? "#181310" : "var(--mlb-text)",
-                    border: "1px solid var(--mlb-border)",
-                  }}>
-                  {d === "expert" && <LeopardSwatch size={11} />}
-                  {d}
-                </button>
-              ))}
-            </div>
-            {!canPickPiece && (
-              <button onClick={() => onStart("ai", difficulty)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
-                <Play size={16} /> Start vs {difficulty}
-              </button>
-            )}
-          </div>
-
-          {canPickPiece && (
-            <div className="rounded-2xl p-5 flex flex-col gap-3 sm:col-span-2" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-              <p className="font-bold" style={{ color: "var(--mlb-text)" }}>Choose your piece</p>
-              <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Unlocked on Advanced and Expert — pick the style your pieces play with.</p>
-              <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={AI_PIECE_STYLES} />
-              <button onClick={() => onStart("ai", difficulty, pieceStyle)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
-                <Play size={16} /> Start vs {difficulty} with {PIECE_STYLE_INFO[pieceStyle].label}
-              </button>
-            </div>
-          )}
-
-          <ModeCard icon={Users} title="Local 2-player" desc="Pass and play on one device with a friend, full rules enforced." accent={palette.teal} onClick={() => onStart("local")} />
-          <ModeCard icon={Target} title="Practice mode" desc="Free-form board with no AI opponent — explore placements and mills at your own pace." accent={palette.copper} onClick={() => onStart("practice")} />
-          <ModeCard icon={Wifi} title="Online multiplayer" desc="Real-time rooms — requires a backend connection. See what's needed to enable it." accent={palette.gold} onClick={onOnline} />
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: "var(--mlb-textDim)" }}>Learn</p>
-        <ModeCard icon={BookOpen} title="Learn Mlabalaba" desc="An interactive, step-by-step guide covering the board, mills, capturing, and strategy." accent={palette.gold} onClick={onTutorial} />
-      </div>
-    </div>
-  );
-}
-
-function Divider() { return <span className="h-4 w-px" style={{ background: "var(--mlb-border)" }} />; }
-
-/* =========================================================================
-   GAME VIEW
-   ========================================================================= */
-
-function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn, roomCode, onlineRole, pieceStyle = "classic" }) {
-  const [state, setState] = useState(createInitialState);
-  const [history, setHistory] = useState([]);
-  const [seconds, setSeconds] = useState(0);
-  const [opponentJoined, setOpponentJoined] = useState(onlineRole === "P2");
-  const [messages, setMessages] = useState([]);
-  const beep = useBeeper(soundOn);
-  const statsSaved = useRef(false);
-  const timerRef = useRef(null);
-  const applyingRemote = useRef(false);
-
-  const isOnline = mode === "online";
-  const myRole = isOnline ? (onlineRole || "P1") : "P1";
-  const isPremium = isOnline || (mode === "ai" && (difficulty === "advanced" || difficulty === "expert"));
-  const opponentPieceStyle = (mode === "ai" && AI_PIECE_STYLES.includes(pieceStyle))
-    ? AI_PIECE_STYLES.find((s) => s !== pieceStyle) || AI_PIECE_STYLES[0]
-    : null;
-
-  const names = mode === "ai" ? { P1: "You", P2: `AI (${difficulty})` }
-    : isOnline ? { P1: onlineRole === "P1" ? "You" : "Opponent", P2: onlineRole === "P2" ? "You" : "Opponent" }
-    : { P1: "Player 1", P2: "Player 2" };
-
-  // Online: subscribe to room changes from the opponent
-  useEffect(() => {
-    if (!isOnline || !roomCode) return;
-    const unsubscribe = subscribeToRoom(roomCode, (row) => {
-      if (row.guest_present) setOpponentJoined(true);
-      if (row.state) {
-        applyingRemote.current = true;
-        setState(row.state);
-      }
-      if (row.messages) setMessages(row.messages);
-    });
-    return () => { unsubscribe(); leaveRoom(roomCode, onlineRole); };
-  }, [isOnline, roomCode, onlineRole]);
-
-  // Online: push local moves to the room (skip when the update came from remote)
-  useEffect(() => {
-    if (!isOnline || !roomCode) return;
-    if (applyingRemote.current) { applyingRemote.current = false; return; }
-    pushRoomState(roomCode, state);
-  }, [state, isOnline, roomCode]);
-  const p1Profile = { rank: "Challenger", level: 4, wins: stats.gamesWon, losses: stats.gamesLost, winPct: stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0 };
-  const p2Profile = mode === "ai"
-    ? { rank: { beginner: "Novice", intermediate: "Skilled", advanced: "Veteran", expert: "Master" }[difficulty], level: { beginner: 1, intermediate: 3, advanced: 6, expert: 9 }[difficulty], wins: "—", losses: "—", winPct: "—" }
-    : { rank: "Challenger", level: 4, wins: "—", losses: "—", winPct: "—" };
-
-  useEffect(() => {
-    timerRef.current = setInterval(() => setSeconds((s) => (state.gameOver ? s : s + 1)), 1000);
-    return () => clearInterval(timerRef.current);
-  }, [state.gameOver]);
-
-  const pushHistory = (prev) => setHistory((h) => [...h, prev]);
-
-  const handlePoint = useCallback((point) => {
-    if (state.gameOver) return;
-    if (mode === "ai" && state.currentPlayer === "P2") return;
-    if (isOnline && state.currentPlayer !== onlineRole) return;
-    let next;
-    if (state.pendingCapture) {
-      if (!getCapturablePoints(state, state.currentPlayer).includes(point)) return;
-      pushHistory(state);
-      next = applyCapture(state, point);
-      beep.capture();
-    } else if (state.phase === "placement") {
-      if (state.points[point] !== null) return;
-      pushHistory(state);
-      next = applyPlace(state, point);
-      next.pendingCapture ? beep.mill() : beep.place();
-    } else {
-      const beforeHistLen = state.moveHistory.length;
-      const beforeSelected = state.selected;
-      next = applySelect(state, point);
-      if (next.moveHistory.length > beforeHistLen) {
-        pushHistory(state);
-        next.pendingCapture ? beep.mill() : beep.move();
-      } else if (next.selected !== beforeSelected) {
-        beep.click();
-      }
-    }
-    setState(next);
-  }, [state, mode, beep]);
-
-  // AI turn
-  useEffect(() => {
-    if (mode !== "ai" || state.gameOver) return;
-    if (state.currentPlayer !== "P2") return;
-    const t = setTimeout(() => {
-      const action = chooseAiAction(state, "P2", difficulty);
-      if (!action) return;
-      const next = applyAction(state, action);
-      if (action.type === "capture") beep.capture();
-      else if (next.pendingCapture) beep.mill();
-      else beep.move();
-      setState(next);
-    }, 550 + Math.random() * 400);
-    return () => clearTimeout(t);
-  }, [state, mode, difficulty, beep]);
-
-  // stats on game over
-  useEffect(() => {
-    if (!state.gameOver || statsSaved.current) return;
-    statsSaved.current = true;
-    beep.win();
-    if (mode === "practice") return;
-    const myRole = isOnline ? onlineRole : "P1";
-    setStats((prev) => {
-      const won = state.gameOver.winner === myRole;
-      const next = {
-        ...prev,
-        gamesPlayed: prev.gamesPlayed + 1,
-        gamesWon: prev.gamesWon + (won ? 1 : 0),
-        gamesLost: prev.gamesLost + (won ? 0 : 1),
-        piecesCaptured: prev.piecesCaptured + state.capturedBy[myRole].length,
-        millsFormed: prev.millsFormed + state.millsFormed[myRole],
-        currentStreak: won ? prev.currentStreak + 1 : 0,
-        bestStreak: won ? Math.max(prev.bestStreak, prev.currentStreak + 1) : prev.bestStreak,
-        recent: [{ result: won ? "Win" : "Loss", opponent: isOnline ? "Online opponent" : names.P2, moves: state.moveHistory.length }, ...prev.recent].slice(0, 8),
-      };
-      saveStats(next);
-      return next;
-    });
-  }, [state.gameOver]);
-
-  const handleUndo = () => {
-    if (history.length === 0) return;
-    const h = [...history];
-    const prevState = h.pop();
-    setHistory(h);
-    setState(prevState);
-    statsSaved.current = false;
-  };
-
-  const handleRematch = () => {
-    setState(createInitialState());
-    setHistory([]);
-    setSeconds(0);
-    statsSaved.current = false;
-  };
-
-  const [confirmingRestart, setConfirmingRestart] = useState(false);
-  const handleRestartOnline = () => {
-    const fresh = createInitialState();
-    setState(fresh);
-    setHistory([]);
-    setSeconds(0);
-    statsSaved.current = false;
-    setConfirmingRestart(false);
-    // the state-change effect above will push `fresh` to the room automatically
-  };
-
-  const handleSendChat = (text) => {
-    if (!text.trim() || !roomCode) return;
-    const optimistic = [...messages, { role: myRole, text: text.trim(), ts: Date.now() }].slice(-50);
-    setMessages(optimistic);
-    sendMessage(roomCode, myRole, text.trim());
-  };
-
-  if (isOnline && !opponentJoined) {
-    return (
-      <div className="mlb-fade-in w-full max-w-lg mx-auto flex flex-col items-center gap-5 text-center py-10">
-        <IconBtn icon={ArrowLeft} label="Leave room" onClick={onExit} className="self-start" />
-        <Loader2 size={32} className="animate-spin" style={{ color: "var(--mlb-gold)" }} />
-        <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>Waiting for your opponent…</h2>
-        <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>Share this room code with them:</p>
-        <div className="flex items-center gap-2 rounded-xl px-5 py-3" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)" }}>
-          <span className="font-mono text-2xl tracking-[0.3em]" style={{ color: "var(--mlb-gold)" }}>{roomCode}</span>
-          <button
-            aria-label="Copy room code"
-            onClick={() => navigator.clipboard?.writeText(roomCode)}
-            className="mlb-focus w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ color: "var(--mlb-text)" }}
-          >
-            <Copy size={15} />
-          </button>
-        </div>
-        <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>The board will appear automatically once they join.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mlb-fade-in w-full max-w-6xl mx-auto flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <IconBtn icon={ArrowLeft} label="Exit to lobby" onClick={onExit} />
-        <div className="flex items-center gap-3 text-xs" style={{ color: "var(--mlb-textDim)" }}>
-          {isOnline && <span className="flex items-center gap-1"><Wifi size={13} style={{ color: "var(--mlb-teal)" }} /> Room {roomCode}</span>}
-          <span className="flex items-center gap-1"><Clock size={14} /> {Math.floor(seconds / 60)}:{(seconds % 60).toString().padStart(2, "0")}</span>
-        </div>
-        {isOnline ? (
-          <button onClick={() => setConfirmingRestart(true)} className="mlb-focus flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
-            style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
-            <RotateCcw size={13} /> Restart game
-          </button>
-        ) : (
-          <button onClick={handleUndo} disabled={history.length === 0} className="mlb-focus flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full disabled:opacity-30"
-            style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
-            <RotateCcw size={13} /> Undo
-          </button>
-        )}
-      </div>
-
-      {confirmingRestart && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#000000aa" }}>
-          <div className="mlb-pop rounded-2xl p-6 w-full max-w-sm text-center" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-            <h3 className="mlb-display text-xl mb-2" style={{ color: "var(--mlb-text)" }}>Restart this game?</h3>
-            <p className="text-sm mb-5" style={{ color: "var(--mlb-textDim)" }}>
-              This clears the board for both players and starts a fresh match in this same room. It can't be undone.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmingRestart(false)} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }}>
-                Cancel
-              </button>
-              <button onClick={handleRestartOnline} className="mlb-focus flex-1 rounded-xl py-2.5 font-bold" style={{ background: "var(--mlb-gold)", color: "#181310" }}>
-                Restart
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <StatusBanner state={state} names={names} />
-
-      <div className="grid lg:grid-cols-[220px_1fr_220px] gap-4 items-start">
-        <div className="order-2 lg:order-1"><PlayerCard side="P1" name={names.P1} avatarTone={palette.copper} isTurn={state.currentPlayer === "P1" && !state.gameOver} state={state} profile={p1Profile} /></div>
-        <div className="order-1 lg:order-2 flex justify-center rounded-2xl p-3 sm:p-6" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
-          <Board state={state} onPointClick={handlePoint} interactive={!state.gameOver} palette={palette} pieceStyle={pieceStyle} myRole={myRole} premium={isPremium} opponentPieceStyle={opponentPieceStyle} />
-        </div>
-        <div className="order-3 flex flex-col gap-4">
-          <PlayerCard side="P2" name={names.P2} avatarTone={palette.teal} isTurn={state.currentPlayer === "P2" && !state.gameOver} state={state} profile={p2Profile} mirrored />
-        </div>
-      </div>
-
-      <MoveHistory history={state.moveHistory} />
-      {isOnline && <ChatPanel messages={messages} myRole={myRole} onSend={handleSendChat} />}
-
-      <ResultsModal state={state} names={names} matchSeconds={seconds} onRematch={handleRematch} onLobby={onExit} isOnline={isOnline} chatProps={{ messages, myRole, onSend: handleSendChat }} />
-    </div>
-  );
-}
-
-/* =========================================================================
-   ROOT APP
+   MAIN APP
    ========================================================================= */
 
 export default function App() {
-  const [view, setView] = useState("lobby"); // lobby | game | tutorial | stats | online
-  const [mode, setMode] = useState("ai");
-  const [difficulty, setDifficulty] = useState("intermediate");
-  const [dark, setDark] = useState(true);
-  const [soundOn, setSoundOn] = useState(true);
-  const [stats, setStats] = useState(defaultStats());
-  const [roomCode, setRoomCode] = useState(null);
-  const [onlineRole, setOnlineRole] = useState(null);
-  const [pieceStyle, setPieceStyle] = useState("classic");
-  const gameKey = useRef(0);
+  const [theme, setTheme] = useState("dark");
+  const [sound, setSound] = useState(true);
+  const [mode, setMode] = useState<"menu" | "local" | "ai" | "online">("menu");
+  const [difficulty, setDifficulty] = useState<"beginner" | "easy" | "medium" | "intermediate" | "advanced" | "expert">("expert");
+  const [pieceStyle, setPieceStyle] = useState("isihlangu");
+  const [gameState, setGameState] = useState(createInitialState);
+  const [stats, setStats] = useState(defaultStats);
+  const [showRules, setShowRules] = useState(false);
+
+  // Online Multiplayer State
+  const [roomCode, setRoomCode] = useState("");
+  const [inputCode, setInputCode] = useState("");
+  const [myRole, setMyRole] = useState("P1");
+  const [oppStyle, setOppStyle] = useState("ucu");
+  const [loadingRoom, setLoadingRoom] = useState(false);
+  const [onlineError, setOnlineError] = useState("");
+
+  const palette = THEME[theme];
+  const audio = useBeeper(sound);
+
+  // Condition: Use custom board ONLY for Online matches or Expert AI matches
+  const shouldUseCustomBoard = mode === "online" || (mode === "ai" && difficulty === "expert");
 
   useEffect(() => { loadStats().then(setStats); }, []);
 
-  const palette = dark ? THEME.dark : THEME.light;
-  const cssVars = {
-    "--mlb-bg": palette.bg, "--mlb-surface": palette.surface, "--mlb-surface2": palette.surface2,
-    "--mlb-border": palette.border, "--mlb-text": palette.text, "--mlb-textDim": palette.textDim,
-    "--mlb-gold": palette.gold, "--mlb-copper": palette.copper, "--mlb-teal": palette.teal,
-    "--mlb-wood": palette.wood, "--mlb-woodLight": palette.woodLight,
+  useEffect(() => {
+    document.documentElement.style.setProperty("--mlb-bg", palette.bg);
+    document.documentElement.style.setProperty("--mlb-surface", palette.surface);
+    document.documentElement.style.setProperty("--mlb-surface2", palette.surface2);
+    document.documentElement.style.setProperty("--mlb-border", palette.border);
+    document.documentElement.style.setProperty("--mlb-text", palette.text);
+    document.documentElement.style.setProperty("--mlb-textDim", palette.textDim);
+    document.documentElement.style.setProperty("--mlb-gold", palette.gold);
+  }, [palette]);
+
+  // Handle Online Subscriptions
+  useEffect(() => {
+    if (mode !== "online" || !roomCode) return;
+    const unsubscribe = subscribeToRoom(roomCode, (roomData: any) => {
+      if (roomData?.state) {
+        setGameState(roomData.state);
+        if (roomData.p1_style && myRole === "P2") setOppStyle(roomData.p1_style);
+        if (roomData.p2_style && myRole === "P1") setOppStyle(roomData.p2_style);
+      }
+    });
+    return () => { unsubscribe(); };
+  }, [mode, roomCode, myRole]);
+
+  // Sound triggers
+  const prevMoveCount = useRef(0);
+  useEffect(() => {
+    if (gameState.moveCount > prevMoveCount.current) {
+      if (gameState.gameOver) audio.win();
+      else if (gameState.pendingCapture) audio.mill();
+      else audio.move();
+      prevMoveCount.current = gameState.moveCount;
+    }
+  }, [gameState, audio]);
+
+  // AI Turn trigger
+  useEffect(() => {
+    if (mode === "ai" && gameState.currentPlayer === "P2" && !gameState.gameOver) {
+      const timer = setTimeout(() => {
+        const action = chooseAiAction(gameState, "P2", difficulty);
+        if (action) {
+          setGameState((prev) => applyAction(prev, action));
+        }
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState, mode, difficulty]);
+
+  // Handle Board Clicks
+  const handlePointClick = (pointIndex: number) => {
+    if (mode === "online" && gameState.currentPlayer !== myRole) return;
+
+    let nextState = gameState;
+    if (gameState.pendingCapture) {
+      nextState = applyCapture(gameState, pointIndex);
+    } else if (gameState.phase === "placement") {
+      nextState = applyPlace(gameState, pointIndex);
+    } else {
+      nextState = applySelect(gameState, pointIndex);
+    }
+
+    if (nextState !== gameState) {
+      setGameState(nextState);
+      if (mode === "online" && roomCode) {
+        pushRoomState(roomCode, nextState);
+      }
+    }
   };
 
-  const startGame = (m, d, ps) => {
-    gameKey.current += 1;
-    setMode(m);
-    if (d) setDifficulty(d);
-    setPieceStyle(ps || "classic");
-    setView("game");
+  const startNewGame = (newMode: "local" | "ai" | "online") => {
+    audio.click();
+    setGameState(createInitialState());
+    setMode(newMode);
+    if (newMode === "ai") setMyRole("P1");
   };
 
-  const enterOnlineRoom = (code, role, ps) => {
-    gameKey.current += 1;
-    setRoomCode(code);
-    setOnlineRole(role);
-    setMode("online");
-    setPieceStyle(ps || "ucu");
-    setView("game");
+  const handleCreateRoom = async () => {
+    setLoadingRoom(true);
+    setOnlineError("");
+    try {
+      const code = await createRoom(pieceStyle);
+      setRoomCode(code);
+      setMyRole("P1");
+      setGameState(createInitialState());
+      setMode("online");
+    } catch (err) {
+      setOnlineError("Failed to create room. Ensure Supabase is configured.");
+    } finally {
+      setLoadingRoom(false);
+    }
+  };
+
+  const handleJoinRoom = async () => {
+    if (!inputCode) return;
+    setLoadingRoom(true);
+    setOnlineError("");
+    try {
+      const room = await joinRoom(inputCode.toUpperCase(), pieceStyle);
+      setRoomCode(room.code);
+      setMyRole("P2");
+      setOppStyle(room.p1_style || "isihlangu");
+      if (room.state) setGameState(room.state);
+      setMode("online");
+    } catch (err) {
+      setOnlineError("Room not found or full.");
+    } finally {
+      setLoadingRoom(false);
+    }
   };
 
   return (
-    <div className="mlb-root min-h-screen w-full flex flex-col" style={{ ...cssVars, background: "var(--mlb-bg)", minHeight: "100vh" }}>
+    <div className="mlb-root min-h-screen flex flex-col" style={{ background: "var(--mlb-bg)", color: "var(--mlb-text)" }}>
       <GlobalStyle />
       <PatternDefs palette={palette} />
-      <header className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sticky top-0 z-10" style={{ background: `${palette.bg}ee`, backdropFilter: "blur(6px)", borderBottom: `1px solid ${palette.border}` }}>
-        <button onClick={() => setView("lobby")} className="mlb-focus flex items-center gap-2">
-          <ShieldMark palette={palette} size={26} />
-          <span className="mlb-display text-lg" style={{ color: palette.text }}>MLABALABA</span>
-        </button>
+
+      {/* Header */}
+      <header className="px-6 py-4 flex items-center justify-between border-b" style={{ borderColor: "var(--mlb-border)", background: "var(--mlb-surface)" }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setMode("menu")}>
+          <ShieldMark palette={palette} size={32} />
+          <h1 className="text-xl font-extrabold tracking-wide mlb-display" style={{ color: palette.gold }}>MLABALABA</h1>
+        </div>
         <div className="flex items-center gap-2">
-          <IconBtn icon={soundOn ? Volume2 : VolumeX} label="Toggle sound" active={soundOn} onClick={() => setSoundOn((s) => !s)} />
-          <IconBtn icon={dark ? Sun : Moon} label="Toggle theme" onClick={() => setDark((d) => !d)} />
+          <IconBtn icon={sound ? Volume2 : VolumeX} label="Toggle Sound" onClick={() => setSound(!sound)} />
+          <IconBtn icon={theme === "dark" ? Sun : Moon} label="Toggle Theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} />
+          <IconBtn icon={BookOpen} label="How to Play" onClick={() => setShowRules(true)} />
         </div>
       </header>
-      <BeadDivider />
 
-      <main className="flex-1 w-full px-4 sm:px-6 py-6 flex flex-col">
-        {view === "lobby" && (
-          <Lobby palette={palette} stats={stats} onStart={startGame} onTutorial={() => setView("tutorial")} onStats={() => setView("stats")} onOnline={() => setView("online")} />
+      {/* Main Container */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 max-w-5xl mx-auto w-full">
+        {mode === "menu" && (
+          <div className="w-full max-w-md space-y-6 text-center mlb-fade-in">
+            <div className="space-y-2">
+              <h2 className="text-3xl font-extrabold mlb-display">The Ancient Game of Strategy</h2>
+              <p className="text-sm opacity-70">A traditional African board game of skill, capture, and mills.</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border space-y-3" style={{ background: "var(--mlb-surface)", borderColor: "var(--mlb-border)" }}>
+              <span className="text-xs font-bold uppercase tracking-wider block opacity-70">Choose Piece Style</span>
+              <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={ONLINE_PIECE_STYLES} />
+            </div>
+
+            <div className="space-y-3">
+              <button onClick={() => startNewGame("ai")} className="w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90" style={{ background: palette.gold, color: "#1a1a1a" }}>
+                <Bot size={20} /> Play vs Computer
+              </button>
+              <button onClick={() => startNewGame("local")} className="w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border hover:bg-black/5" style={{ borderColor: "var(--mlb-border)" }}>
+                <Users size={20} /> Local Pass & Play
+              </button>
+
+              <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--mlb-border)" }}>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="ENTER ROOM CODE"
+                    value={inputCode}
+                    onChange={(e) => setInputCode(e.target.value)}
+                    className="flex-1 rounded-xl px-4 text-sm font-mono tracking-wider uppercase border focus:outline-none"
+                    style={{ background: "var(--mlb-surface2)", borderColor: "var(--mlb-border)" }}
+                  />
+                  <button onClick={handleJoinRoom} disabled={loadingRoom} className="px-4 py-2.5 rounded-xl font-bold text-sm" style={{ background: palette.teal, color: "#fff" }}>
+                    Join
+                  </button>
+                </div>
+                <button onClick={handleCreateRoom} disabled={loadingRoom} className="w-full py-2.5 rounded-xl font-bold text-sm border hover:bg-black/5 flex items-center justify-center gap-2" style={{ borderColor: "var(--mlb-border)" }}>
+                  {loadingRoom ? <Loader2 size={16} className="animate-spin" /> : <Wifi size={16} />} Create Online Room
+                </button>
+                {onlineError && <p className="text-xs text-red-500">{onlineError}</p>}
+              </div>
+            </div>
+          </div>
         )}
-        {view === "game" && (
-          <GameView key={gameKey.current} mode={mode} difficulty={difficulty} palette={palette} onExit={() => setView("lobby")} stats={stats} setStats={setStats} soundOn={soundOn} roomCode={roomCode} onlineRole={onlineRole} pieceStyle={pieceStyle} />
+
+        {mode !== "menu" && (
+          <div className="w-full grid md:grid-cols-12 gap-6 items-start">
+            {/* Left Sidebar */}
+            <div className="md:col-span-3 space-y-4">
+              <button onClick={() => setMode("menu")} className="flex items-center gap-2 text-xs font-bold opacity-70 hover:opacity-100">
+                <ArrowLeft size={16} /> Main Menu
+              </button>
+
+              {mode === "ai" && (
+                <div className="p-3 rounded-xl border space-y-2" style={{ background: "var(--mlb-surface2)", borderColor: "var(--mlb-border)" }}>
+                  <span className="text-[10px] font-bold uppercase opacity-60 block">AI Difficulty</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["easy", "intermediate", "expert"] as const).map((lvl) => (
+                      <button
+                        key={lvl}
+                        onClick={() => setDifficulty(lvl)}
+                        className={`py-1 text-[11px] font-bold capitalize rounded transition ${
+                          difficulty === lvl ? "bg-amber-500 text-black" : "opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        {lvl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {mode === "online" && (
+                <div className="p-3 rounded-xl border text-center space-y-1" style={{ background: "var(--mlb-surface2)", borderColor: "var(--mlb-border)" }}>
+                  <span className="text-[10px] font-bold uppercase opacity-60">Room Code</span>
+                  <div className="font-mono font-bold text-lg tracking-widest text-emerald-500">{roomCode}</div>
+                </div>
+              )}
+
+              <PlayerCard
+                name={mode === "ai" ? "Player 1 (You)" : mode === "online" ? (myRole === "P1" ? "You (P1)" : "Opponent (P1)") : "Player 1"}
+                role="P1"
+                active={gameState.currentPlayer === "P1"}
+                state={gameState}
+                palette={palette}
+                pieceStyle={myRole === "P1" ? pieceStyle : oppStyle}
+              />
+
+              <PlayerCard
+                name={mode === "ai" ? `Bot (${difficulty})` : mode === "online" ? (myRole === "P2" ? "You (P2)" : "Opponent (P2)") : "Player 2"}
+                role="P2"
+                active={gameState.currentPlayer === "P2"}
+                state={gameState}
+                palette={palette}
+                pieceStyle={myRole === "P2" ? pieceStyle : oppStyle}
+              />
+            </div>
+
+            {/* Board Area */}
+            <div className="md:col-span-6 flex flex-col items-center gap-4">
+              <StatusBanner state={gameState} palette={palette} myRole={myRole} />
+              <div className="w-full flex items-center justify-center p-2 rounded-3xl" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+                <Board
+                  state={gameState}
+                  onPointClick={handlePointClick}
+                  interactive={!gameState.gameOver}
+                  palette={palette}
+                  myRole={myRole}
+                  pieceStyle={pieceStyle}
+                  opponentPieceStyle={oppStyle}
+                  shouldUseCustomBoard={shouldUseCustomBoard}
+                />
+              </div>
+            </div>
+
+            {/* Right Sidebar */}
+            <div className="md:col-span-3 space-y-4">
+              <MoveHistory history={gameState.moveHistory} palette={palette} />
+              <button
+                onClick={() => setGameState(createInitialState())}
+                className="w-full py-2.5 rounded-xl font-bold text-xs border flex items-center justify-center gap-2 hover:bg-black/5"
+                style={{ borderColor: "var(--mlb-border)" }}
+              >
+                <RotateCcw size={14} /> Restart Game
+              </button>
+            </div>
+          </div>
         )}
-        {view === "tutorial" && <TutorialView palette={palette} onBack={() => setView("lobby")} />}
-        {view === "stats" && <StatsView stats={stats} palette={palette} onBack={() => setView("lobby")} />}
-        {view === "online" && <OnlinePanel palette={palette} onBack={() => setView("lobby")} onEnterRoom={enterOnlineRoom} />}
       </main>
 
-      <footer className="text-center text-[11px] py-4" style={{ color: palette.textDim }}>
-        MLABALABA — a modern strategy game inspired by the traditional Morabaraba mill game.
-      </footer>
+      {/* Rules Modal */}
+      {showRules && <RulesModal onClose={() => setShowRules(false)} palette={palette} />}
     </div>
   );
 }
