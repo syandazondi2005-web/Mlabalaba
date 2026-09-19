@@ -1,0 +1,74 @@
+import { supabase } from "./supabase";
+
+function randomCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+  let out = "";
+  for (let i = 0; i < 5; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+export async function createRoom(initialState, hostName) {
+  if (!supabase) throw new Error("Supabase is not configured");
+  let code = randomCode();
+  // extremely unlikely, but make sure the code isn't already taken
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data } = await supabase.from("rooms").select("id").eq("id", code).maybeSingle();
+    if (!data) break;
+    code = randomCode();
+  }
+  const { error } = await supabase.from("rooms").insert({
+    id: code,
+    state: initialState,
+    host_present: true,
+    guest_present: false,
+    host_name: hostName || "Player 1",
+  });
+  if (error) throw error;
+  return code;
+}
+
+export async function joinRoom(code, guestName) {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const { data, error } = await supabase.from("rooms").select("*").eq("id", code).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("No room found with that code");
+  if (data.guest_present) throw new Error("That room already has two players");
+  const { error: updateError } = await supabase
+    .from("rooms")
+    .update({ guest_present: true, guest_name: guestName || "Player 2", updated_at: new Date().toISOString() })
+    .eq("id", code);
+  if (updateError) throw updateError;
+  return { state: data.state, hostName: data.host_name || "Player 1" };
+}
+
+export async function pushRoomState(code, state) {
+  if (!supabase) return;
+  await supabase.from("rooms").update({ state, updated_at: new Date().toISOString() }).eq("id", code);
+}
+
+export async function leaveRoom(code, role) {
+  if (!supabase) return;
+  const field = role === "P1" ? { host_present: false } : { guest_present: false };
+  await supabase.from("rooms").update(field).eq("id", code);
+}
+
+export async function sendMessage(code, role, text) {
+  if (!supabase) return;
+  const { data } = await supabase.from("rooms").select("messages").eq("id", code).maybeSingle();
+  const current = (data && data.messages) || [];
+  const next = [...current, { role, text, ts: Date.now() }].slice(-50); // keep the last 50
+  await supabase.from("rooms").update({ messages: next, updated_at: new Date().toISOString() }).eq("id", code);
+}
+
+export function subscribeToRoom(code, onChange) {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`room-${code}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${code}` },
+      (payload) => onChange(payload.new)
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
