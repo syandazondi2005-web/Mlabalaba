@@ -597,10 +597,10 @@ function Avatar({ name, tone, size = 44 }) {
    ========================================================================= */
 
 const PIECE_STYLE_INFO = {
-  isihlangu: { label: "Isihlangu", fillId: "shieldgrad" },
-  inkomo: { label: "Inkomo", fillId: "inkomograd" },
-  ucu: { label: "Ucu Ball", fillId: "ucugrad" },
-  leopard: { label: "Leopard", fillId: null }, // uses the leopard pattern directly
+  isihlangu: { label: "Isihlangu", fillId: "shieldgrad", desc: "Strength & Protection — Stand firm." },
+  inkomo: { label: "Inkomo", fillId: "inkomograd", desc: "Power & Determination — Charge forward." },
+  ucu: { label: "Ucu", fillId: "ucugrad", desc: "Unity & Connection." },
+  leopard: { label: "Leopard", fillId: null, desc: "Agility & Strategy — Move with wisdom." }, // uses the leopard pattern directly
 };
 const AI_PIECE_STYLES = ["ucu", "leopard"];
 const ONLINE_PIECE_STYLES = ["isihlangu", "inkomo", "ucu", "leopard"];
@@ -706,6 +706,7 @@ function PieceStylePicker({ value, onChange, palette, options }) {
               <PieceImage style={id} cx={20} cy={20} r={id === "isihlangu" ? 11 : 17} />
             </svg>
             <span className="text-[10px] font-bold" style={{ color: "var(--mlb-text)" }}>{info.label}</span>
+            <span className="text-[9px] leading-tight px-1.5 text-center" style={{ color: "var(--mlb-textDim)" }}>{info.desc}</span>
           </button>
         );
       })}
