@@ -1906,7 +1906,7 @@ export default function App() {
       style={{
         ...cssVars,
         minHeight: "100vh",
-        backgroundImage: `linear-gradient(${palette.bg}f2, ${palette.bg}f2), url(${leopardBgUrl})`,
+        backgroundImage: `linear-gradient(${palette.bg}99, ${palette.bg}99), url(${leopardBgUrl})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",
