@@ -1495,7 +1495,7 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline, playerN
     <div className="mlb-fade-in max-w-5xl mx-auto w-full flex flex-col gap-8">
       <div className="text-center flex flex-col items-center gap-2 pt-4">
         <div className="flex items-center gap-3">
-          <ShieldMark palette={palette} size={40} />
+          <img src={isihlanguImgUrl} alt="" style={{ height: 48, width: "auto" }} />
           <h1 className="mlb-display text-5xl tracking-wide" style={{ color: "var(--mlb-text)" }}>MLABALABA</h1>
         </div>
         <p className="text-sm" style={{ color: "var(--mlb-textDim)" }}>A modern take on the classic Southern African mill game</p>
@@ -1917,7 +1917,7 @@ export default function App() {
       <PatternDefs palette={palette} />
       <header className="w-full flex items-center justify-between px-4 sm:px-6 py-3 sticky top-0 z-10" style={{ background: `${palette.bg}ee`, backdropFilter: "blur(6px)", borderBottom: `1px solid ${palette.border}` }}>
         <button onClick={() => setView("lobby")} className="mlb-focus flex items-center gap-2">
-          <ShieldMark palette={palette} size={26} />
+          <img src={isihlanguImgUrl} alt="" style={{ height: 30, width: "auto" }} />
           <span className="mlb-display text-lg" style={{ color: palette.text }}>MLABALABA</span>
         </button>
         <div className="flex items-center gap-2">
