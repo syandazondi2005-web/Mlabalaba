@@ -744,6 +744,12 @@ function BoardEngraving({ cx, cy, scale, flip, kind }) {
   );
 }
 
+// The new premium board photo has its own decorative border baked in, with a plain
+// playing surface occupying the center of the image. Measured precisely from the
+// asset: the plain area spans from 24.707% to 75.195% of the image on both axes.
+const BOARD_INNER_MIN_FRAC = 0.2470703125;
+const BOARD_INNER_MAX_FRAC = 0.751953125;
+
 function Board({
   state, onPointClick, interactive, palette, size = 560, showLegalHints = true, pieceStyle = "classic", myRole = "P1", premium = false, opponentPieceStyle = null,
 }) {
@@ -763,6 +769,15 @@ function Board({
   const p1Color = palette.copper;
   const p2Color = palette.teal;
   const pr = premium ? 21 : 18; // piece radius
+
+  // Map the existing 50–550 point coordinate space onto the new board photo's
+  // plain inner surface (24.707%–75.195% of the 0–600 viewBox), without touching
+  // POINTS/MILLS/ADJACENCY or any game logic — this is a pure rendering transform.
+  const innerMin = 600 * BOARD_INNER_MIN_FRAC;
+  const innerMax = 600 * BOARD_INNER_MAX_FRAC;
+  const gridScale = (innerMax - innerMin) / 500;
+  const gridOffset = innerMin - 50 * gridScale;
+  const gridTransform = premium ? `translate(${gridOffset},${gridOffset}) scale(${gridScale})` : undefined;
 
   return (
     <svg viewBox="0 0 600 600" width="100%" height="100%" style={{ maxWidth: size, maxHeight: size }} role="img" aria-label="Mlabalaba board">
@@ -812,23 +827,16 @@ function Board({
 
       {!premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbWood)" opacity="0.15" />}
       {premium && (
-        <>
-          <clipPath id="mlbBoardClip">
-            <rect x="10" y="10" width="580" height="580" rx="26" />
-          </clipPath>
-          <image
-            href={boardTextureUrl}
-            x="10" y="10" width="580" height="580"
-            preserveAspectRatio="xMidYMid slice"
-            clipPath="url(#mlbBoardClip)"
-          />
-          <rect x="10" y="10" width="580" height="580" rx="26" fill="#000000" opacity="0.12" />
-          <rect x="10" y="10" width="580" height="580" rx="26" fill="url(#mlbVignette)" />
-        </>
+        <image
+          href={boardTextureUrl}
+          x="0" y="0" width="600" height="600"
+          preserveAspectRatio="xMidYMid slice"
+        />
       )}
-      <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />
-      <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />
+      {!premium && <rect x="10" y="10" width="580" height="580" rx="26" fill="none" stroke={palette.border} strokeWidth="2" />}
+      {!premium && <rect x="2" y="2" width="596" height="596" rx="30" fill="none" stroke="url(#mlbBeads)" strokeWidth="6" opacity="0.5" />}
 
+      <g transform={gridTransform}>
       {premium && ALL_EDGES.map(([a, b], idx) => (
         <line
           key={`groove-${idx}`}
@@ -922,6 +930,7 @@ function Board({
           </g>
         );
       })}
+      </g>
     </svg>
   );
 }
