@@ -602,7 +602,7 @@ const PIECE_STYLE_INFO = {
   ucu: { label: "Ucu", fillId: "ucugrad", desc: "Unity & Connection." },
   leopard: { label: "Leopard", fillId: null, desc: "Agility & Strategy — Move with wisdom." }, // uses the leopard pattern directly
 };
-const AI_PIECE_STYLES = ["ucu", "leopard"];
+const AI_PIECE_STYLES = ["isihlangu", "inkomo", "ucu", "leopard"];
 const ONLINE_PIECE_STYLES = ["isihlangu", "inkomo", "ucu", "leopard"];
 
 function pieceFill(style, defaultFill) {
@@ -1425,6 +1425,86 @@ function OnlinePanel({ palette, onBack, onEnterRoom, playerName, setPlayerName }
 }
 
 /* =========================================================================
+   HISTORY VIEW
+   ========================================================================= */
+
+function HistoryView({ palette, onBack }) {
+  const sections = [
+    {
+      title: "A game with many names",
+      text: "Mlabalaba is also known as Morabaraba, and the game has regional names including Mmela among some Sotho speakers and Umlabalaba among Nguni speakers. It is played in South Africa and neighbouring countries such as Lesotho and Mozambique.",
+    },
+    {
+      title: "Part of living heritage",
+      text: "Morabaraba has been played in different South African communities for generations. It is more than a board game: it brings people together through play and develops planning, strategy, communication and patience.",
+    },
+    {
+      title: "The board and the 'cows'",
+      text: "The game uses a distinctive 24-point board and traditionally uses small stones as playing pieces, often referred to as cows. Historical and archaeological records show Morabaraba boards and stone pieces as part of Southern African material heritage.",
+    },
+    {
+      title: "From tradition to education",
+      text: "Researchers have also shown that Morabaraba can connect indigenous knowledge with mathematics, including geometry, patterns, movement and strategic thinking. This makes the game useful not only for recreation but also for learning.",
+    },
+    {
+      title: "The modern revival",
+      text: "South Africa's national Indigenous Games programme helped bring Morabaraba/Mlabalaba into organised competition. The national revival gained momentum with the launch of Indigenous Games at the Basotho Cultural Village on 24 February 2001.",
+    },
+    {
+      title: "Our digital chapter",
+      text: "Our Indigenous Games System carries that living heritage into a modern digital experience. The goal is not to replace the traditional game, but to create another way for new generations to learn, play and engage with it.",
+    },
+  ];
+
+  return (
+    <div className="mlb-fade-in max-w-4xl mx-auto w-full flex flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <IconBtn icon={ArrowLeft} label="Back to lobby" onClick={onBack} />
+        <div>
+          <h2 className="mlb-display text-2xl" style={{ color: "var(--mlb-text)" }}>History of Mlabalaba</h2>
+          <p className="text-xs mt-1" style={{ color: "var(--mlb-textDim)" }}>From community play and living heritage to a new digital experience.</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-5 sm:p-7" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${palette.teal}22`, color: palette.teal }}>
+            <Info size={21} />
+          </div>
+          <div>
+            <p className="font-bold" style={{ color: "var(--mlb-text)" }}>A living Southern African game</p>
+            <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>History, culture, learning and continuity</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {sections.map((section, index) => (
+            <div key={section.title} className="rounded-xl p-4" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)" }}>
+              <div className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold" style={{ background: `${palette.gold}22`, color: palette.gold }}>
+                  {index + 1}
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm mb-1" style={{ color: "var(--mlb-text)" }}>{section.title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--mlb-textDim)" }}>{section.text}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-4 sm:p-5" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
+        <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "var(--mlb-gold)" }}>Sources & further reading</p>
+        <p className="text-xs leading-relaxed" style={{ color: "var(--mlb-textDim)" }}>
+          South African Journal of Education (2009), “Incorporating the indigenous game of morabaraba in the learning of mathematics”; South Africa's Department of Sport, Arts and Culture Indigenous Games Festival materials; and recent heritage research documenting Morabaraba/Mlabalaba as part of Southern African cultural heritage.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
    STATS VIEW
    ========================================================================= */
 
@@ -1484,12 +1564,14 @@ function ModeCard({ icon: Icon, title, desc, onClick, accent }) {
   );
 }
 
-function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline, playerName, setPlayerName }) {
+function Lobby({ palette, stats, onStart, onTutorial, onHistory, onStats, onOnline, playerName, setPlayerName }) {
   const [difficulty, setDifficulty] = useState("intermediate");
   const [pieceStyle, setPieceStyle] = useState("ucu");
+  const [localP1Style, setLocalP1Style] = useState("ucu");
+  const [localP2Style, setLocalP2Style] = useState("inkomo");
   const [localP1, setLocalP1] = useState("Player 1");
   const [localP2, setLocalP2] = useState("Player 2");
-  const canPickPiece = difficulty === "advanced" || difficulty === "expert";
+  const canPickPiece = true;
   const winPct = stats.gamesPlayed ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
   return (
     <div className="mlb-fade-in max-w-5xl mx-auto w-full flex flex-col gap-8">
@@ -1551,17 +1633,12 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline, playerN
                 </button>
               ))}
             </div>
-            {!canPickPiece && (
-              <button onClick={() => onStart("ai", difficulty, null, { P1: playerName || "You" })} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
-                <Play size={16} /> Start vs {difficulty}
-              </button>
-            )}
           </div>
 
           {canPickPiece && (
             <div className="rounded-2xl p-5 flex flex-col gap-3 sm:col-span-2" style={{ background: "var(--mlb-surface)", border: "1px solid var(--mlb-border)" }}>
               <p className="font-bold" style={{ color: "var(--mlb-text)" }}>Choose your piece</p>
-              <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Unlocked on Advanced and Expert — pick the style your pieces play with.</p>
+              <p className="text-xs" style={{ color: "var(--mlb-textDim)" }}>Available in every difficulty — pick the style your pieces play with.</p>
               <PieceStylePicker value={pieceStyle} onChange={setPieceStyle} palette={palette} options={AI_PIECE_STYLES} />
               <button onClick={() => onStart("ai", difficulty, pieceStyle, { P1: playerName || "You" })} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.gold, color: "#181310" }}>
                 <Play size={16} /> Start vs {difficulty} with {PIECE_STYLE_INFO[pieceStyle].label}
@@ -1579,7 +1656,15 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline, playerN
               <input value={localP2} onChange={(e) => setLocalP2(e.target.value.slice(0, 15))} placeholder="Player 2 name" aria-label="Player 2 name" maxLength={15}
                 className="mlb-focus text-xs rounded-lg px-2.5 py-2" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)", color: "var(--mlb-text)" }} />
             </div>
-            <button onClick={() => onStart("local", null, null, { P1: localP1 || "Player 1", P2: localP2 || "Player 2" })} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.teal, color: "#0d1a17" }}>
+            <div className="rounded-xl p-3" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)" }}>
+              <p className="text-xs font-bold mb-2" style={{ color: "var(--mlb-text)" }}>Choose Player 1's piece</p>
+              <PieceStylePicker value={localP1Style} onChange={setLocalP1Style} palette={palette} options={AI_PIECE_STYLES} />
+            </div>
+            <div className="rounded-xl p-3" style={{ background: "var(--mlb-surface2)", border: "1px solid var(--mlb-border)" }}>
+              <p className="text-xs font-bold mb-2" style={{ color: "var(--mlb-text)" }}>Choose Player 2's piece</p>
+              <PieceStylePicker value={localP2Style} onChange={setLocalP2Style} palette={palette} options={AI_PIECE_STYLES} />
+            </div>
+            <button onClick={() => onStart("local", null, localP1Style, { P1: localP1 || "Player 1", P2: localP2 || "Player 2" }, localP2Style)} className="mlb-focus mt-1 rounded-xl py-2.5 font-bold flex items-center justify-center gap-2" style={{ background: palette.teal, color: "#0d1a17" }}>
               <Play size={16} /> Start local match
             </button>
           </div>
@@ -1590,8 +1675,11 @@ function Lobby({ palette, stats, onStart, onTutorial, onStats, onOnline, playerN
       </div>
 
       <div>
-        <p className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: "var(--mlb-textDim)" }}>Learn</p>
-        <ModeCard icon={BookOpen} title="Learn Mlabalaba" desc="An interactive, step-by-step guide covering the board, mills, capturing, and strategy." accent={palette.gold} onClick={onTutorial} />
+        <p className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: "var(--mlb-textDim)" }}>Learn & Heritage</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <ModeCard icon={BookOpen} title="Learn Mlabalaba" desc="An interactive, step-by-step guide covering the board, mills, capturing, and strategy." accent={palette.gold} onClick={onTutorial} />
+          <ModeCard icon={Info} title="History of Mlabalaba" desc="Discover the game's Southern African names, cultural role, revival, and journey into the digital age." accent={palette.teal} onClick={() => onHistory()} />
+        </div>
       </div>
     </div>
   );
@@ -1616,10 +1704,13 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
 
   const isOnline = mode === "online";
   const myRole = isOnline ? (onlineRole || "P1") : "P1";
-  const isPremium = isOnline || (mode === "ai" && (difficulty === "advanced" || difficulty === "expert"));
-  const opponentPieceStyle = (mode === "ai" && AI_PIECE_STYLES.includes(pieceStyle))
-    ? AI_PIECE_STYLES.find((s) => s !== pieceStyle) || AI_PIECE_STYLES[0]
-    : null;
+  // Use the premium board in every game mode and every AI difficulty.
+  const isPremium = true;
+  const opponentPieceStyle = mode === "ai"
+    ? (AI_PIECE_STYLES.includes(pieceStyle) ? (AI_PIECE_STYLES.find((s) => s !== pieceStyle) || AI_PIECE_STYLES[0]) : AI_PIECE_STYLES[0])
+    : mode === "local"
+      ? ((customNames && AI_PIECE_STYLES.includes(customNames.__opponentPieceStyle)) ? customNames.__opponentPieceStyle : "inkomo")
+      : null;
 
   const names = mode === "ai" ? { P1: (customNames && customNames.P1) || "You", P2: `AI (${difficulty})` }
     : isOnline ? {
@@ -1856,7 +1947,7 @@ function GameView({ mode, difficulty, palette, onExit, stats, setStats, soundOn,
    ========================================================================= */
 
 export default function App() {
-  const [view, setView] = useState("lobby"); // lobby | game | tutorial | stats | online
+  const [view, setView] = useState("lobby"); // lobby | game | tutorial | stats | online | history
   const [mode, setMode] = useState("ai");
   const [difficulty, setDifficulty] = useState("intermediate");
   const [dark, setDark] = useState(true);
@@ -1880,12 +1971,12 @@ export default function App() {
     "--mlb-wood": palette.wood, "--mlb-woodLight": palette.woodLight,
   };
 
-  const startGame = (m, d, ps, names) => {
+  const startGame = (m, d, ps, names, opponentPs = null) => {
     gameKey.current += 1;
     setMode(m);
     if (d) setDifficulty(d);
     setPieceStyle(ps || "classic");
-    setCustomNames(names || null);
+    setCustomNames(names ? { ...names, __opponentPieceStyle: opponentPs } : null);
     setView("game");
   };
 
@@ -1929,13 +2020,14 @@ export default function App() {
 
       <main className="flex-1 w-full px-4 sm:px-6 py-6 flex flex-col">
         {view === "lobby" && (
-          <Lobby palette={palette} stats={stats} onStart={startGame} onTutorial={() => setView("tutorial")} onStats={() => setView("stats")} onOnline={() => setView("online")} playerName={playerName} setPlayerName={setPlayerName} />
+          <Lobby palette={palette} stats={stats} onStart={startGame} onTutorial={() => setView("tutorial")} onHistory={() => setView("history")} onStats={() => setView("stats")} onOnline={() => setView("online")} playerName={playerName} setPlayerName={setPlayerName} />
         )}
         {view === "game" && (
           <GameView key={gameKey.current} mode={mode} difficulty={difficulty} palette={palette} onExit={() => setView("lobby")} stats={stats} setStats={setStats} soundOn={soundOn} roomCode={roomCode} onlineRole={onlineRole} pieceStyle={pieceStyle} customNames={customNames} onlineMyName={playerName} onlineOpponentName={onlineOpponentName} setOnlineOpponentName={setOnlineOpponentName} />
         )}
         {view === "tutorial" && <TutorialView palette={palette} onBack={() => setView("lobby")} />}
         {view === "stats" && <StatsView stats={stats} palette={palette} onBack={() => setView("lobby")} />}
+        {view === "history" && <HistoryView palette={palette} onBack={() => setView("lobby")} />}
         {view === "online" && <OnlinePanel palette={palette} onBack={() => setView("lobby")} onEnterRoom={enterOnlineRoom} playerName={playerName} setPlayerName={setPlayerName} />}
       </main>
 
